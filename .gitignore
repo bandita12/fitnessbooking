@@ -1,0 +1,49 @@
+# --- Environment / Secrets ---
+.env
+.env.backup
+.env.production
+.env.local
+
+# --- PHP / Composer (Laravel Backend) ---
+vendor/
+composer.phar
+
+# --- Laravel Runtime & Cache ---
+/public/hot
+/public/storage
+/storage/*.key
+/storage/logs/*.log
+/bootstrap/cache/*.php
+.phpunit.result.cache
+
+# --- Node / React Frontend ---
+node_modules/
+/build
+/dist
+coverage/
+.vite/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- Database (PostgreSQL) ---
+# *.sql und *.dump bei Bedarf auskommentieren, falls Schemas/Seeds versioniert werden
+*.sql
+*.dump
+*.sql.gz
+
+# --- IDE / Editor ---
+/.idea
+/.fleet
+/.nova
+/.vscode/*
+!/.vscode/extensions.json
+
+# --- Deployment / Cloud ---
+.netlify
+.vercel
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+desktop.ini
