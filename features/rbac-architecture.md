@@ -1,0 +1,331 @@
+# RBAC-Architektur — Berechtigungssystem & Rollen
+
+Stand: 2026-10-14. Dieses Dokument beschreibt den **SOLL-Zustand** des rollenbasierten
+Berechtigungssystems. Quelle der Anforderungen: `AGENTS.todo.md`, Abschnitt
+„🔐 Feature: Berechtigungssystem & Rollen (RBAC)". Prosa Deutsch, Code/Identifier Englisch.
+
+## Zielbild & Rollen
+
+**Single-Role-Modell:** Jeder Benutzer hat **genau eine** Rolle. Abgebildet als
+String-Spalte `users.role` plus PHP-Backed-Enum `App\Enums\UserRole`
+(`admin`, `studio_admin`, `trainer`, `customer`). **Keine `roles`-Tabelle**, keine
+`role_user`-Pivot, keine Mehrfachrollen. Diese Entscheidung ersetzt die ursprüngliche
+Formulierung im TODO („Tabelle `roles` oder Role-Feld"): das Role-Feld als String-Enum
+wurde gewählt, weil Single-Role die Anforderungen vollständig abdeckt und Joins/Rollen-
+Wechsel-Logik entfallen.
+
+| Rolle | Scope-Beschreibung (aus den Akzeptanzkriterien) |
+|---|---|
+| `admin` | Super-Admin. Vollzugriff auf alle Systemfunktionen. Legt neue Studios an und weist Studio-Admins zu (`users.assign-roles`). Hat keinen eigenen `studio_id` (globaler Scope). |
+| `studio_admin` | Verwendet `users.studio_id`. Verantwortlich für die Stammdaten **seines** Studios: Adresse/Details, Räume, Kurse. Fremde Studios sind für ihn nicht sichtbar (404). |
+| `trainer` | Hat `users.studio_id` (Zuordnung zum Studio) und wird konkreten Kursen über die Pivot-Tabelle `course_user` zugewiesen. Darf **nur den eigenen zugewiesenen** Kursen Einträge kommentieren (Teilnehmerzahl/Beschreibung präzisieren) und Status-Updates (`note`, `cancelled`, `substitute`) posten. |
+| `customer` | Sieht das Kursangebot **aller** Studios und bucht frei verfügbare Kurse ein (`POST /api/bookings`) oder bis 2 Stunden vor Kursbeginn kostenlos wieder aus (`DELETE /api/bookings/{booking}`). Kein `studio_id`. |
+
+Zusätzliche Felder am User: `users.role` (String, Default `customer`) und
+`users.studio_id` (nullable FK → `studios`, für Studio-Admins und Trainer).
+
+## Migrationen
+
+**Portabilitäts-Regeln (gelten für ALLE Migrationen dieses Features):**
+
+1. **Kein PostgreSQL-spezifisches SQL.** Ausschließlich den Laravel-Schema-Builder
+   verwenden; kein rohes `DB::statement` mit PG-Dialekt (keine PG-Only-Typen, -Operatoren,
+   `SERIAL`, `generate_series` o. Ä.). Dev läuft auf PostgreSQL (Container
+   `fitnessbooking-db`), Tests auf SQLite `:memory:` — die Migrationen müssen auf beiden
+   laufen.
+2. **`json`, nicht `jsonb`.** Wo JSON-Spalten gebraucht werden: `$table->json(...)`.
+   Laravel mapped auf PG `json` (nicht `jsonb`); keine PG-JSONB-Operatoren oder GIN-Indizes
+   verwenden. (In diesem Feature vorerst keine JSON-Spalte nötig.)
+3. **Datums-Arithmetik über Query-Builder/Carbon**, nie über PG-`INTERVAL`-Syntax oder
+   Raw-SQL-Funktionen (z. B. Stornofrist `starts_at - 2h` im Code via
+   `$course->starts_at->subHours(2)`, nicht in SQL).
+4. **`down()` bleibt absichtlich LEER** (Kommentar erlaubt). Rollbacks werden in diesem
+   Projekt nie ausgeführt; eine fehlerhafte `down()` ist gefährlicher als keine.
+5. **Laravel-Timestamp-Namensgebung:** Dateinamen `YYYY_MM_DD_HHMMSS_<snake_case_action>.php`,
+   `created_at`/`updated_at` via `$table->timestamps()`.
+6. **Deployed migrations sind immutable:** Eine Migration, die auf irgendeiner Umgebung
+   gelaufen ist, wird nicht mehr editiert — Korrekturen kommen in eine NEUE Migration.
+
+**Reihenfolge (mit Abhängigkeitsbegründung):**
+
+1. **`create_studios_table`** — Basis-Tabelle; FK-Ziel für `users.studio_id`, `rooms`, `courses`.
+2. **`add_role_and_studio_id_to_users`** — ALTER `users`: `role` string(32) Default `'customer'`,
+   `studio_id` foreignId nullable → `studios`, constrained, nullOnDelete, Index auf `studio_id`.
+   (Benötigt Tab existiert ab Schritt 1.)
+3. **`create_rooms_table`** — Räume gehören zu einem Studio.
+4. **`create_courses_table`** — Kurse gehören zu Studio + optional Raum.
+5. **`create_course_user_table`** (Pivot) — Kurs ↔ Trainer (n:1-Verhältnis pro Kurs, Mehrfachzuweisung möglich).
+6. **`create_bookings_table`** — Kundenbuchungen. **(Muss VOR `course_updates` entstehen — siehe Hinweis.)**
+7. **`create_course_updates_table`** — Update-/Protokoll-Einträge zu Kursen.
+
+> **Abhängigkeitsnotiz:** `course_updates` referenziert `bookings` (Spalte `booking_id`
+> nullable FK → `bookings`). Ursprünglich war `course_updates` VOR `bookings` geplant;
+> die Reihenfolge wurde getauscht, damit das FK-Ziel beim Anlegen existiert (relevant
+> besonders für SQLite `:memory:`-Testläufe, wo FK-Reihenfolgen strikt geprüft werden).
+> Finale Kette: `studios → users-alter → rooms → courses → course_user → bookings → course_updates`.
+
+**Kurs-Spalten im Detail:**
+
+```php
+// 1) create_studios_table
+$table->id();
+$table->string('name');
+$table->string('street');
+$table->string('zip');
+$table->string('city');
+$table->timestamps();
+
+// 2) add_role_and_studio_id_to_users (Schema::table)
+$table->string('role', 32)->default('customer');
+$table->foreignId('studio_id')->nullable()->constrained('studios')->nullOnDelete();
+$table->index('studio_id');
+
+// 3) create_rooms_table
+$table->id();
+$table->foreignId('studio_id')->constrained()->cascadeOnDelete();
+$table->string('name');
+$table->unsignedInteger('capacity');
+$table->timestamps();
+
+// 4) create_courses_table
+$table->id();
+$table->foreignId('studio_id')->constrained()->cascadeOnDelete();
+$table->foreignId('room_id')->nullable()->constrained('rooms')->nullOnDelete();
+$table->string('title');
+$table->text('description')->nullable();
+$table->timestamp('starts_at');
+$table->timestamp('ends_at');
+$table->unsignedInteger('capacity');
+$table->string('status', 32)->default('scheduled'); // 'scheduled' | 'cancelled'
+$table->timestamps();
+$table->index('studio_id');
+$table->index('starts_at');
+
+// 5) create_course_user_table (Pivot: Kurs hat viele Trainer)
+$table->id();
+$table->foreignId('course_id')->constrained()->cascadeOnDelete();
+$table->foreignId('user_id')->constrained()->cascadeOnDelete();
+$table->unique(['course_id', 'user_id']);
+
+// 6) create_bookings_table
+$table->id();
+$table->foreignId('user_id')->constrained()->cascadeOnDelete();
+$table->foreignId('course_id')->constrained()->cascadeOnDelete();
+$table->unique(['user_id', 'course_id']); // verhindert Doppelbuchung
+$table->timestamps();
+
+// 7) create_course_updates_table (Protokoll: Entfall/Vertretung/Notiz)
+$table->id();
+$table->foreignId('course_id')->constrained()->cascadeOnDelete();
+$table->foreignId('user_id')->constrained()->cascadeOnDelete(); // Autor
+$table->foreignId('booking_id')->nullable()->constrained('bookings')->nullOnDelete();
+$table->string('type', 32); // 'note' | 'cancelled' | 'substitute'
+$table->text('body');
+$table->timestamps();
+$table->index('course_id');
+```
+
+## Authorization
+
+**Trennung Gate vs. Policy:** Gates (benannt nach der Capability) beantworten
+„darf die Rolle das prinzipiell?", Policies beantworten „darf der User DIESES Objekt?".
+Die Route prüft beides: `->can('capability')` für die Rolle, `authorize()`/Policy für das Objekt.
+
+**Capability-Matrix:**
+
+| Capability | admin | studio_admin | trainer | customer |
+|---|---|---|---|---|
+| `studios.manage` | ✅ | ❌ | ❌ | ❌ |
+| `users.assign-roles` | ✅ | ❌ | ❌ | ❌ |
+| `studios.update` | ✅ | ✅ (nur eigenes Studio) | ❌ | ❌ |
+| `rooms.manage` | ✅ | ✅ (nur eigenes Studio) | ❌ | ❌ |
+| `courses.manage` | ✅ | ✅ (nur eigenes Studio) | ❌ | ❌ |
+| `course-updates.create` | ✅ | ✅ | ✅ (nur zugewiesene Kurse) | ❌ |
+| `courses.view` | ✅ | ✅ | ✅ | ✅ (alle Studios) |
+| `bookings.manage` | ✅ | ❌ | ❌ | ✅ |
+
+**Gates (in `AppServiceProvider` oder `AuthServiceProvider`, benannt nach Capability):**
+
+```php
+Gate::define('studios.manage',          fn (User $u) => $u->role === UserRole::Admin);
+Gate::define('users.assign-roles',      fn (User $u) => $u->role === UserRole::Admin);
+Gate::define('studios.update',          fn (User $u) => $u->role === UserRole::Admin || $u->role === UserRole::StudioAdmin);
+Gate::define('rooms.manage',            fn (User $u) => $u->role === UserRole::Admin || $u->role === UserRole::StudioAdmin);
+Gate::define('courses.manage',          fn (User $u) => $u->role === UserRole::Admin || $u->role === UserRole::StudioAdmin);
+Gate::define('course-updates.create',   fn (User $u) => in_array($u->role, [UserRole::Admin, UserRole::StudioAdmin, UserRole::Trainer], true));
+Gate::define('courses.view',            fn (User $u) => true);        // jede authentifizierte Rolle
+Gate::define('bookings.manage',         fn (User $u) => true);        // jede authentifizierte Rolle; Feinscoping in BookingPolicy
+```
+
+**Policies:**
+
+- **`StudioPolicy`** — `update`/`manageRooms`/`manageCourses`: nur wenn
+  `$user->studio_id === $studio->id` (Studio-Admin des eigenen Studios). Der Admin
+  umgeht das via `Gate::before` oder Admin-Zweig in der Policy.
+- **`CoursePolicy`** — `createUpdate`/`update`: Trainer dann, wenn ein Eintrag in der
+  Pivot `course_user` für (`course_id`, `user_id`) existiert; Studio-Admin, wenn
+  `$user->studio_id === $course->studio_id`; Admin immer.
+- **`BookingPolicy`** — `delete` (Austragen): Ownership, `$user->id === $booking->user_id`.
+  (Austragen der eigenen Buchung ist kein Rollenprivileg, sondern Ownership-ChECK —
+  zusätzlich gilt das 2-Stunden-Fenster, siehe Fachlogik.)
+
+**Route-Middleware:** Capabilities werden über `->can('...')` an die Route gebunden,
+z. B. `Route::post('/studios', ...)->can('studios.manage');`. Damit scheitert die
+Rollen-Prüfung, bevor Controller/Policy laufen.
+
+**Cross-Tenant-Zugriff liefert 404, nicht 403.** Ein Studio-Admin, der auf ein fremdes
+Studio (bzw. dessen Kurse/Räume) zugreift, erhält 404 — damit existenz keine
+Information leaked. Umsetzung: Ressourcen im Controller **studioseitig scoped** auflösen,
+z. B. `Course::where('studio_id', $user->studio_id)->findOrFail($id)` — fremde Studio-ID
+fällt als `ModelNotFoundException` zu 404 durch. Die Policy prüft dann nur noch das
+bereits gefundene Objekt und liefert nie 403 auf Fremd-Studio-Ressourcen.
+
+**Tenant-Scope wird serverseitig aufgelöst.** `$user->studio_id` kommt aus der
+Datenbank — nie aus Token-/Session-Claims. Ein gem-inteter Claim ist replayable und
+kann stale sein (Studio-Wechsel würden sonst nicht greifen); ein JWT-Cookie-Ansatz mit
+`studio_id`-Claim ist ausgeschlossen.
+
+## Auth (Sanctum SPA cookie mode)
+
+**Entscheidung: Laravel Sanctum im SPA-Cookie-Modus** (nicht Token-Modus). Abhängigkeit
+`laravel/sanctum` bleibt unverändert. Dev-Frontend (Vite, `localhost:5173`) und API
+(`localhost:8000`) sind same-site → Cookie-Flow funktioniert ohne Token-Handling im
+Frontend.
+
+**Scaffold-Anforderungen:**
+
+- Routen: `GET /sanctum/csrf-cookie` (Sanctum-Controller, gibt XSRF-Cookie aus),
+  `POST /api/login`, `POST /api/logout`, `GET /api/me`. Authentifizierte Routen hängen
+  hinter `auth:sanctum`.
+- `config/sanctum.php`: `stateful` muss die Dev-Origin enthalten:
+  `http://localhost:5173` (und `http://127.0.0.1:5173`). Produktions-Origin ergänzen,
+  sobald Deployment steht (siehe Offene Punkte).
+- Frontend-Axios: `withCredentials: true`; den XSRF-Token aus dem `XSRF-TOKEN`-Cookie
+  als Header `X-XSRF-TOKEN` mitsenden (Axios-Defaultverhalten bei `withCredentials`).
+- `SESSION_DRIVER` persistent wählen (`database` oder `file`, nicht `array`) — die
+  Dev-`.env` nutzt bereits `database`; `.env.example` dokumentiert das.
+- **Behebt den aktuellen Fehler `Route [login] not defined` (500):** Die Anwendung
+  leitet aktuell auf die benannte Route `login` um, die es nicht gibt (Sanctum
+  SPA-Modus liefert von Haus aus KEINE Login-Route). Mit den expliziten
+  `/api/login`-Routen plus Handler, der unauthentifizierte API-Requests als 401-JSON
+  beantwortet (statt `route('login')` aufzulösen), entfällt die Exception.
+
+## Seeding
+
+**`RolesAndUsersSeeder`** legt pro Rolle genau einen Test-User an (läuft aus dem
+`DatabaseSeeder`):
+
+| E-Mail | Rolle | `studio_id` | Besonderheit |
+|---|---|---|---|
+| `admin@example.com` | `admin` | NULL | Vollzugriff; falls der User aus dem bestehenden `DatabaseSeeder` schon existiert, wird sein `role` auf `admin` promoviert (updateOrCreate statt blind firstOrCreate, weil die Migration Default `customer` setzt). |
+| `studio1@example.com` | `studio_admin` | → erstes Studio | Stammdaten-Pflege des eigenen Studios. |
+| `trainer1@example.com` | `trainer` | → erstes Studio | plus `course_user`-Zuweisung auf einen Demo-Kurs. |
+| `kunde@example.com` | `customer` | NULL | plus eine Buchung auf den Demo-Kurs. |
+
+Regeln:
+
+- **Idempotent via `firstOrCreate`** mit der E-Mail als Suchschlüssel; Rollen-Attribute
+  nur beim Anlegen gesetzt. Ein zweiter `db:seed`-Lauf erzeugt keine Duplikate und
+  keine Unique-Verletzung.
+- **Dev-Passwörter aus Env mit Defaults:** `ADMIN_PASSWORD`, `STUDIO_ADMIN_PASSWORD`,
+  `TRAINER_PASSWORD`, `CUSTOMER_PASSWORD` (Defaults im Seeder, dokumentiert in
+  `backend/.env.example`).
+- Benötigte Demodaten (erstes Studio, Demo-Kurs) legt der Seeder per `firstOrCreate`
+  an, falls noch keine existieren (Studios/Kurse haben keine eigenen Seeder).
+- **Seed-if-fresh-Guard:** Der Seeder läuft nur auf frischer DB — z. B.
+  `if (User::where('role', '!=', UserRole::Customer->value)->exists()) { return; }`
+  oder `User::count() === 0`. Verhindert, dass ein späteres `db:seed` auf einer
+  bestückten Dev-/Prod-DB erneut Test-User anlegt oder Passwörter zurücksetzt.
+- Deploy-Hinweis: Nach `add_role_and_studio_id_to_users` einmal `db:seed` laufen lassen,
+  damit der vorbestehende Dev-Admin die Rolle `admin` erhält (Default wäre `customer`).
+
+## Fachlogik
+
+- **Kapazitätsregel:** Eine Buchung ist nur erfolgreich, solange
+  `bookings->where('course_id', $course->id)->count() < $course->capacity`.
+  Bei vollständig belegtem Kurs → **422** (Validierungsfehler „Kurs ausgebucht").
+- **Stornofrist:** Ein Kunde darf seine Buchung kostenlos entfernen, solange
+  `now() <= $course->starts_at->subHours(2)` („bis 2 Stunden vor Kursbeginn").
+  Danach → **422**. Es gibt keine Zahlungsintegration; „kostenlos" ist hier reines
+  Zeitfenster, keine Gebührenlogik.
+- **Kurs-Status als Aggregat:** `courses.status` ∈ `scheduled | cancelled`. Postet ein
+  Trainer/Studio-Admin ein `course_updates`-Element vom Typ `cancelled`, wird der Kurs-
+  Status auf `cancelled` gesetzt **und** der Eintrag im `course_updates`-Log
+  protokolliert (Statusänderungen werden in das Update-Log gespiegelt; das Log ist die
+  Audit-Trail, `status` der schnelle Lesezugriff). Typen: `note` (Kommentar/
+  Präzisierung), `cancelled` (Entfall), `substitute` (Vertretung).
+
+## Tests
+
+- **Rolle × Route-Matrix** als Feature-Tests: jede Rolle gegen jede API-Route — erlaubt
+  ergibt 2xx, verboten ergibt 403/404 gemäß Regeln unten.
+- **Own-studio-only:** `studio_admin` von Studio A darf Ressourcen von Studio B **nicht**
+  verändern.
+- **Foreign studio → 404** (nicht 403) — Cross-Tenant-Zugriff leakt keine Existenz.
+- **Doppelbuchung → 422** — zweite Buchung desselben Users auf denselben Kurs
+  (Unique-Constraint `(user_id, course_id)` als DB-Rückwand; Service liefert saubere
+  422-Validation davor).
+- **Nicht zugewiesener Trainer → 404** — Trainer ohne `course_user`-Zuweisung bekommt
+  auf `/api/courses/{id}/updates` keine 403, sondern 404 (Kurs existiert für ihn nicht).
+- **Storno nach Fristablauf → 422** — `DELETE /api/bookings/{booking}` innerhalb 2h
+  vor `starts_at` schlägt fehl.
+- **DB:** SQLite `:memory:` via `RefreshDatabase` (`phpunit.xml` setzt `DB_CONNECTION=sqlite`,
+  `DB_DATABASE=:memory:`).
+- **Auth-Helper auf der Basis-`TestCase`:** Der Helper führt den echten Sanctum-Cookie-
+  Flow aus (`GET /sanctum/csrf-cookie` → `POST /api/login` mit Test-User), damit die
+  Tests denselben Pfad nehmen wie das Frontend (Session/CSRF inklusive).
+
+## API-Routen
+
+| Route | Methoden | Middleware / Gate | Policy |
+|---|---|---|---|
+| `GET /sanctum/csrf-cookie` | GET | — (Sanctum) | — |
+| `POST /api/login` | POST | — (+ Throttle) | — |
+| `POST /api/logout` | POST | `auth:sanctum` | — |
+| `GET /api/me` | GET | `auth:sanctum` | — |
+| `GET /api/studios` | GET | `auth:sanctum` + `can:courses.view` | — |
+| `GET /api/studios/{id}/courses` | GET | `auth:sanctum` + `can:courses.view` | — |
+| `POST /api/admin/studios` | POST | `auth:sanctum` + `can:studios.manage` | — |
+| `PUT /api/admin/studios/{studio}` | PUT | `auth:sanctum` + `can:studios.manage` | — |
+| `DELETE /api/admin/studios/{studio}` | DELETE | `auth:sanctum` + `can:studios.manage` | — |
+| `POST /api/admin/users` | POST | `auth:sanctum` + `can:users.assign-roles` | — |
+| `PUT /api/admin/users/{user}` | PUT | `auth:sanctum` + `can:users.assign-roles` | — |
+| `PUT /api/studios/{studio}/details` | PUT | `auth:sanctum` + `can:studios.update` | `StudioPolicy` (studio_id) |
+| `POST /api/studios/{studio}/rooms` | POST | `auth:sanctum` + `can:rooms.manage` | `StudioPolicy` (studio_id) |
+| `PUT /api/studios/{studio}/rooms/{room}` | PUT | `auth:sanctum` + `can:rooms.manage` | `StudioPolicy` (studio_id) |
+| `DELETE /api/studios/{studio}/rooms/{room}` | DELETE | `auth:sanctum` + `can:rooms.manage` | `StudioPolicy` (studio_id) |
+| `POST /api/studios/{studio}/courses` | POST | `auth:sanctum` + `can:courses.manage` | `StudioPolicy` (studio_id) |
+| `PUT /api/studios/{studio}/courses/{course}` | PUT | `auth:sanctum` + `can:courses.manage` | `StudioPolicy` (studio_id) |
+| `DELETE /api/studios/{studio}/courses/{course}` | DELETE | `auth:sanctum` + `can:courses.manage` | `StudioPolicy` (studio_id) |
+| `POST /api/courses/{course}/updates` | POST | `auth:sanctum` + `can:course-updates.create` | `CoursePolicy` (Pivot/Studio) |
+| `PUT /api/courses/{course}/updates/{update}` | PUT | `auth:sanctum` + `can:course-updates.create` | `CoursePolicy` (Pivot/Studio) |
+| `POST /api/bookings` | POST | `auth:sanctum` + `can:bookings.manage` | — (Kapazität + Unique) |
+| `DELETE /api/bookings/{booking}` | DELETE | `auth:sanctum` + `can:bookings.manage` | `BookingPolicy` (Ownership) |
+
+Studio-Scoping: Controller lösen `{studio}`, `{course}`, `{room}` stets im
+Tenant-Kontext auf (`where('studio_id', $user->studio_id)`); fremde IDs → 404.
+Customer-Routen (`/api/bookings`, Kurs-Listen) sind nicht studioseitig gescoped.
+
+## Offene Punkte
+
+- **Abweichung von früherem Wunsch (`trainer_id` → Pivot):** Eine frühere Anforderung
+  sah eine Spalte `trainer_id` direkt auf `courses` vor. Finale Entscheidung: die
+  Pivot-Tabelle `course_user` — damit sind **mehrere Trainer pro Kurs** möglich
+  (future-proof für Vertretungen, mehrgleisige Kurse). `trainer_id` wird NICHT gebaut.
+- **Rollen-Modell-Abweichung:** TODO-Akzeptanzkriterium 1 nennt „Tabelle `roles` ODER
+  Role-Feld"; gewählt wurde das String-Enum-Feld (`App\Enums\UserRole`). Keine
+  `roles`-Tabelle.
+- **`courses.view` für Gäste:** Aktuell nur für eingeloggte User geplant; ob die
+  Kursliste öffentlich (ohne Login) einsehbar sein soll, ist nicht entschieden.
+- **`bookings.manage` für Admin:** Aktuell ✅ via Super-Admin-Vollzugriff. Falls der
+  Admin nie selbst buchen können soll, Matrix + Gate anpassen.
+- **Benachrichtigungen:** Mail/Push bei `cancelled`/`substitute`-Updates ist nicht
+  spezifiziert und Teil einer späteren Iteration.
+- **`sanctum.stateful`-Produktionsorigin:** Sobald das Frontend deployt wird, Origin
+  ergänzen (Dev: `http://localhost:5173`).
+- **Raum-Doppelbelegung / Zeitkonflikte** zwischen Kursen sind nicht Teil dieser
+  Iteration.
+- **Passwort-Reset / E-Mail-Verification:** Laravel-Default-Flows, hier nicht vertieft.
+- **Frontend-Anteile** (React Auth-Context, `<ProtectedRoute allowedRoles={[...]} />`,
+  visuelles Ausblenden) sind im TODO beschrieben, aber nicht Gegenstand dieser
+  Backend-Architektur — Umsetzung folgt separat.
