@@ -1,12 +1,35 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import heroImg from './assets/hero.png'
 import reactLogo from './assets/react.svg'
 import viteLogo from './assets/vite.svg'
 import api from './lib/api'
+import fetchFitnessTest, { type FitnessTestData } from './utils/fetchFitnessTest'
 import './App.css'
 
 function App() {
   const [count, setCount] = useState(0)
+  const [fitnessTest, setFitnessTest] = useState<FitnessTestData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let active = true
+    fetchFitnessTest()
+      .then((data: FitnessTestData) => {
+        if (active) setFitnessTest(data)
+      })
+      .catch((err: unknown) => {
+        if (active) {
+          setError(err instanceof Error ? err.message : 'Unbekannter Fehler')
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [])
 
   return (
     <>
@@ -22,7 +45,19 @@ function App() {
             Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
           </p>
           <p>API-Basis-URL: {String(api.defaults.baseURL)}</p>
-          <p>Status: Backend-Client bereit</p>
+          {loading && <p>Lade ...</p>}
+          {error !== null && <p>Fehler: {error}</p>}
+          {fitnessTest !== null && (
+            <ul>
+              <li>Service: {fitnessTest.service}</li>
+              <li>Status: {fitnessTest.status}</li>
+              <li>Nachricht: {fitnessTest.message}</li>
+              <li>
+                Zeitstempel:{' '}
+                {new Date(fitnessTest.timestamp).toLocaleString('de-DE')}
+              </li>
+            </ul>
+          )}
         </div>
         <button
           type="button"
