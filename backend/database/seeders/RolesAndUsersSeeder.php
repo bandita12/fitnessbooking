@@ -52,16 +52,18 @@ class RolesAndUsersSeeder extends Seeder
             ],
         );
 
-        // Trainer — Kursleiter, zugewiesen über course_user-Roster oder trainer_id auf courses/sessions
-        User::firstOrCreate(
+        // Trainer — arbeitet n:m für mehrere Studios (Pivot `studio_user`);
+        // users.studio_id bleibt NULL und gilt nur für Studio-Admins.
+        $trainer = User::firstOrCreate(
             ['email' => 'trainer1@example.com'],
             [
                 'name' => 'Trainer User',
                 'role' => UserRole::Trainer->value,
                 'password' => env('TRAINER_PASSWORD', 'secret'),
-                'studio_id' => $studio->id,
+                'studio_id' => null,
             ],
         );
+        $trainer->studios()->syncWithoutDetaching([$studio->id]);
 
         // Kunde — kann Kurse buchen und bis 2h vor Beginn stornieren
         User::firstOrCreate(

@@ -21,6 +21,13 @@ trait ScopedByStudio
             return $query;
         }
 
+        if ($user->role === UserRole::Trainer) {
+            return $query->whereIn(
+                $this->getTable().'.'.$this->tenantColumn(),
+                $user->studios()->pluck('studios.id')
+            );
+        }
+
         return $query->where($this->getTable().'.'.$this->tenantColumn(), $user->studio_id);
     }
 

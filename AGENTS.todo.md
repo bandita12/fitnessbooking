@@ -52,7 +52,7 @@ Implementierung eines rollenbasierten Zugriffssystems (Admins, Studio-Admins, Ku
 1. **Rollen:** Enum-Einzelrolle — String-Spalte `users.role` + `App\Enums\UserRole` (`admin`, `studio_admin`, `trainer`, `customer`); **keine** `roles`-Tabelle.
 2. **Auth:** Laravel Sanctum **SPA-Cookie-Modus** (nicht Token); Frontend-Origin in `sanctum.stateful`, Axios `withCredentials` + XSRF; behebt den 500er `Route [login] not defined`.
 3. **Regeltermin / Tagesinstanz:** `courses` (Vorlage: day_of_week, start_time, end_time, capacity nullable) + `course_sessions` (date, room_id nullable, trainer_id für Vertretung, status, session_info, capacity nullable). Capacity-Kaskade `room→course→session` (erstes Nicht-NULL). Buchungen und `course_updates` referenzieren `course_session_id`. Storno bis 2 h vor Termin-Beginn.
-4. **Trainer-Zuweisung (revidiert 2026-10-15):** `trainer_id` auf `courses` (Lead-Trainer) und `course_sessions` (Termin-Trainer / Vertretung) eingeführt, plus die Roster-Pivot `course_user` für Kommentar-Berechtigung. Die ältere „trainer_id wird NICHT gebaut"-Entscheidung ist damit superseded; beide Konstrukte koexistieren.
+4. **Trainer-Zuweisung (revidiert 2026-10-15):** `trainer_id` auf `courses` (Lead-Trainer) und `course_sessions` (Termin-Trainer / Vertretung) eingeführt; Trainer arbeiten n:m via Pivot `studio_user` (`users.studio_id` nur für Studio-Admins). Die Roster-Pivot `course_user` bleibt deferred/optional.
 
 ### ✅ Umsetzungsplan (Reihenfolge einhalten: `course_updates` braucht `bookings`)
 
@@ -65,7 +65,8 @@ Implementierung eines rollenbasierten Zugriffssystems (Admins, Studio-Admins, Ku
 - [ ] `create_rooms_table` — `studio_id` FK cascade, `name`, `capacity` unsignedInteger
 - [ ] `create_courses_table` — `studio_id` FK cascade, `trainer_id` nullable FK nullOnDelete (Lead-Trainer), `title`, `description`/`thumbnail_url`/`image_url`/`web_link` nullable, `day_of_week` unsigned tiny, `start_time`/`end_time` time, `capacity` nullable; Index studio_id + trainer_id
 - [ ] `create_course_sessions_table` — `course_id` FK cascade, `room_id` nullable FK nullOnDelete, `trainer_id` nullable FK nullOnDelete (Termin-Trainer), `date`, `status` string(16) default `scheduled`, `session_info` nullable, `capacity` nullable; Index (course_id, date) + trainer_id
-- [ ] `create_course_user_table` — Optional (slim, 2026-10-15): Pivot Trainer-Roster zurzeit nicht implementiert; `trainer_id` auf `courses` und `course_sessions` genügt für Lead-Trainer und Vertretung. Nachrüstung bei Mehr-Trainer-Kursen möglich.
+- [ ] `create_course_user_table` — Optional (slim, 2026-10-15): Pivot Trainer-Roster zurzeit nicht implementiert; `trainer_id` auf `courses` und `course_sessions` plus Studio-Pivot `studio_user` genügen. Nachrüstung bei Mehr-Trainer-Kursen möglich.
+- [x] `create_studio_user_table` (2026-10-15) — Trainer ↔ Studios n:m: `user_id` + `studio_id` FK cascade, **unique(user_id, studio_id)**; Tabelle `studio_user`
 - [ ] `create_bookings_table` — `user_id` FK cascade, `course_session_id` FK cascade, **unique(user_id, course_session_id)** (keine Doppelbuchung desselben Termins)
 - [ ] `create_course_updates_table` — `course_session_id` FK cascade, `user_id` (Autor), `booking_id` nullable FK nullOnDelete, `type` (`note|cancelled|substitute`), `body`; Index course_session_id
 - **Hinweis (Kurs-Modell):** Regeltermin `courses` (Vorlage) + konkrete Einheit `course_sessions` (Tagesinstanz); Trainer-Zuordnung `trainer_id` auf beiden (course_sessions-Trainer ermöglicht Vertretung). Bookings & course_updates referenzieren ab sofort `course_session_id` statt `course_id`.
@@ -92,7 +93,8 @@ Implementierung eines rollenbasierten Zugriffssystems (Admins, Studio-Admins, Ku
 - [x] `StudioPolicy` (`view`/`update`/`manageRooms`/`manageCourses`) und `CoursePolicy` (`update`/`createUpdate`); Trainer-Prüfung über `courses.trainer_id` (Lead) ODER `course_sessions.trainer_id` (Vertretung) — Pivot `course_user` bleibt optional/deferred
 - [x] 404-statt-403: `ScopedByStudio`-Trait (`forTenant`) + `Course::assignedTo()` — Controller lösen per `findOrFail()` auf, Cross-Tenant → `ModelNotFoundException` (404)
 - [x] Minimale Modelle als Policy-Voraussetzung angelegt: `Studio`, `Course`, `CourseSession` (volle Schritt-3-Modellierung folgt separat)
-- [x] Regressionstest `tests/Feature/RbacAuthorizationTest.php` (6 Tests: Enum-Cast, Capability-Matrix, Studio-/Course-Policy, 404-Scopes, Seeder-Idempotenz) — SQLite `:memory:` + Cross-Engine-Lauf auf Wegwerf-PostgreSQL
+- [x] Regressionstest `tests/Feature/RbacAuthorizationTest.php` (Enum-Cast, Capability-Matrix, Studio-/Course-Policy, 404-Scopes, Seeder-Idempotenz, Trainer-n:m) — SQLite `:memory:` + Cross-Engine-Lauf auf Wegwerf-PostgreSQL
+- [x] Trainer-n:m (2026-10-15): `User::studios()` / `Studio::trainers()` via `studio_user`; `users.studio_id` nur für Studio-Admins (Trainer NULL); `CoursePolicy` + Scopes pivot-basiert; Seeder verknüpft Trainer via Pivot
 - [ ] Offen: `BookingPolicy` (Ownership) + Route-`can:`-Verdrahtung folgen mit Schritt 6 (API-Routen)
 
 #### Schritt 6 — API-Routen (Tabelle im Plan)

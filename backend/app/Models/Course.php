@@ -50,16 +50,13 @@ class Course extends Model
     }
 
     /**
-     * Courses a trainer may post updates for (lead or substitute on any
-     * session), already tenant-scoped. findOrFail() on top yields 404 for
+     * Courses a trainer may lead or edit: studio-linked via the `studio_user`
+     * pivot, or substitute on any session. findOrFail() on top yields 404 for
      * unassigned trainers instead of 403.
      */
     public function scopeAssignedTo(Builder $query, User $user): Builder
     {
-        return $query->where($this->getTable().'.studio_id', $user->studio_id)
-            ->where(function (Builder $inner) use ($user): void {
-                $inner->where($this->getTable().'.trainer_id', $user->id)
-                    ->orWhereHas('sessions', fn (Builder $s): Builder => $s->where('trainer_id', $user->id));
-            });
+        return $query->whereIn($this->getTable().'.studio_id', $user->studios()->pluck('studios.id'))
+            ->orWhereHas('sessions', fn (Builder $s): Builder => $s->where('trainer_id', $user->id));
     }
 }

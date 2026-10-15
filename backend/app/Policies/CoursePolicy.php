@@ -24,12 +24,8 @@ class CoursePolicy
             return true;
         }
 
-        if ($user->studio_id === null || $user->studio_id !== $course->studio_id) {
-            return false;
-        }
-
         if ($user->role === UserRole::StudioAdmin) {
-            return true;
+            return $user->studio_id !== null && $user->studio_id === $course->studio_id;
         }
 
         if ($user->role !== UserRole::Trainer) {
@@ -40,6 +36,10 @@ class CoursePolicy
             return true;
         }
 
-        return $course->sessions()->where('trainer_id', $user->id)->exists();
+        if ($course->sessions()->where('trainer_id', $user->id)->exists()) {
+            return true;
+        }
+
+        return $user->studios()->whereKey($course->studio_id)->exists();
     }
 }

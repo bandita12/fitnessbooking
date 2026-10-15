@@ -47,6 +47,18 @@ class RbacAuthorizationTest extends TestCase
         ]);
     }
 
+    /**
+     * @param  array<Studio>  $studios
+     */
+    private function linkTrainer(User $trainer, Studio ...$studios): User
+    {
+        $trainer->studios()->syncWithoutDetaching(
+            array_map(fn (Studio $s): int => $s->id, $studios)
+        );
+
+        return $trainer;
+    }
+
     public function test_role_casts_to_enum_and_defaults_to_customer(): void
     {
         $user = User::factory()->create();
@@ -83,7 +95,10 @@ class RbacAuthorizationTest extends TestCase
         ];
 
         foreach ($matrix as $role => $expectations) {
-            $user = $this->makeUser(UserRole::from($role), $role === UserRole::Customer->value ? null : $studio->id);
+            $user = $this->makeUser(UserRole::from($role), in_array($role, [UserRole::Customer->value, UserRole::Trainer->value], true) ? null : $studio->id);
+            if ($role === UserRole::Trainer->value) {
+                $this->linkTrainer($user, $studio);
+            }
 
             foreach ($expectations as $ability => $expected) {
                 $this->assertSame($expected, Gate::forUser($user)->allows($ability), "{$role} / {$ability}");
@@ -96,7 +111,7 @@ class RbacAuthorizationTest extends TestCase
         $own = $this->makeStudio('Own');
         $foreign = $this->makeStudio('Foreign');
         $studioAdmin = $this->makeUser(UserRole::StudioAdmin, $own->id);
-        $trainer = $this->makeUser(UserRole::Trainer, $own->id);
+        $trainer = $this->linkTrainer($this->makeUser(UserRole::Trainer), $own);
         $customer = $this->makeUser(UserRole::Customer);
 
         $this->assertTrue($studioAdmin->can('update', $own));
@@ -105,6 +120,8 @@ class RbacAuthorizationTest extends TestCase
         $this->assertFalse($studioAdmin->can('update', $foreign));
         $this->assertFalse($studioAdmin->can('manageRooms', $foreign));
 
+        $this->assertTrue($trainer->can('view', $own));
+        $this->assertFalse($trainer->can('view', $foreign));
         $this->assertFalse($trainer->can('update', $own));
         $this->assertFalse($customer->can('update', $own));
     }
@@ -113,9 +130,9 @@ class RbacAuthorizationTest extends TestCase
     {
         $studio = $this->makeStudio();
         $other = $this->makeStudio('Other');
-        $lead = $this->makeUser(UserRole::Trainer, $studio->id);
-        $substitute = $this->makeUser(UserRole::Trainer, $studio->id);
-        $unassigned = $this->makeUser(UserRole::Trainer, $studio->id);
+        $lead = $this->makeUser(UserRole::Trainer);
+        $substitute = $this->makeUser(UserRole::Trainer);
+        $unassigned = $this->makeUser(UserRole::Trainer);
         $studioAdmin = $this->makeUser(UserRole::StudioAdmin, $studio->id);
         $foreignAdmin = $this->makeUser(UserRole::StudioAdmin, $other->id);
 
@@ -133,6 +150,26 @@ class RbacAuthorizationTest extends TestCase
         $this->assertFalse($foreignAdmin->can('update', $course));
     }
 
+    public function test_trainer_linked_to_two_studios_may_edit_in_both(): void
+    {
+        $studioA = $this->makeStudio('A');
+        $studioB = $this->makeStudio('B');
+        $studioC = $this->makeStudio('C');
+        $trainer = $this->linkTrainer($this->makeUser(UserRole::Trainer), $studioA, $studioB);
+        $courseA = $this->makeCourse($studioA);
+        $courseB = $this->makeCourse($studioB);
+        $courseC = $this->makeCourse($studioC);
+
+        $this->assertTrue($trainer->can('update', $courseA));
+        $this->assertTrue($trainer->can('createUpdate', $courseB));
+        $this->assertFalse($trainer->can('update', $courseC));
+
+        $this->assertSame(
+            [$courseA->id, $courseB->id],
+            Course::assignedTo($trainer)->orderBy('id')->pluck('id')->all()
+        );
+    }
+
     public function test_cross_tenant_studio_resolution_throws_not_found_instead_of_forbidden(): void
     {
         $own = $this->makeStudio('Own');
@@ -147,7 +184,7 @@ class RbacAuthorizationTest extends TestCase
     {
         $own = $this->makeStudio('Own');
         $foreign = $this->makeStudio('Foreign');
-        $trainer = $this->makeUser(UserRole::Trainer, $own->id);
+        $trainer = $this->makeUser(UserRole::Trainer);
         $customer = $this->makeUser(UserRole::Customer);
         $course = $this->makeCourse($foreign);
 
@@ -166,6 +203,11 @@ class RbacAuthorizationTest extends TestCase
             ['admin', 'customer', 'studio_admin', 'trainer'],
             User::orderBy('role')->pluck('role')->map(fn (UserRole $r) => $r->value)->all()
         );
+
+        $trainer = User::where('role', UserRole::Trainer->value)->firstOrFail();
+        $this->assertNull($trainer->studio_id);
+        $this->assertSame(1, $trainer->studios()->count());
+        $this->assertSame('Demo Studio', $trainer->studios()->firstOrFail()->name);
 
         $this->seed(DatabaseSeeder::class);
 

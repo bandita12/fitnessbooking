@@ -18,11 +18,13 @@ Wechsel-Logik entfallen.
 |---|---|
 | `admin` | Super-Admin. Vollzugriff auf alle Systemfunktionen. Legt neue Studios an und weist Studio-Admins zu (`users.assign-roles`). Hat keinen eigenen `studio_id` (globaler Scope). |
 | `studio_admin` | Verwendet `users.studio_id`. Verantwortlich für die Stammdaten **seines** Studios: Adresse/Details, Räume, Kurse. Fremde Studios sind für ihn nicht sichtbar (404). |
-| `trainer` | Hat `users.studio_id` (Zuordnung zum Studio) und wird konkreten Kursen über die Pivot-Tabelle `course_user` zugewiesen. Darf **nur den eigenen zugewiesenen** Kursen Einträge kommentieren (Teilnehmerzahl/Beschreibung präzisieren) und Status-Updates (`note`, `cancelled`, `substitute`) posten. |
+| `trainer` | Arbeitet **n:m für mehrere Studios** (Pivot `studio_user`); `users.studio_id` ist für Trainer `NULL`. Darf Kurse leiten/editieren, wenn er Lead-Trainer, Termin-Vertretung oder für das Studio freigeschaltet ist, sowie Updates (`note`, `cancelled`, `substitute`) posten. |
 | `customer` | Sieht das Kursangebot **aller** Studios und bucht frei verfügbare Kurse ein (`POST /api/bookings`) oder bis 2 Stunden vor Kursbeginn kostenlos wieder aus (`DELETE /api/bookings/{booking}`). Kein `studio_id`. |
 
 Zusätzliche Felder am User: `users.role` (String, Default `customer`) und
-`users.studio_id` (nullable FK → `studios`, für Studio-Admins und Trainer).
+`users.studio_id` (nullable FK → `studios`, **nur für Studio-Admins** ausgewertet;
+für Trainer `NULL`, deren Studio-Zuordnung läuft über `studio_user`). Relationen:
+`User::studios()` / `Studio::trainers()` (BelongsToMany über `studio_user`).
 
 ## Migrationen
 
@@ -68,8 +70,15 @@ Zusätzliche Felder am User: `users.role` (String, Default `customer`) und
    nullable (nullOnDelete, Termin-Trainer / Vertretung), `date`, `status` default
    `'scheduled'` (`scheduled|cancelled|substituted`), `session_info` nullable, `capacity`
    nullable (`NULL` = erbt von `courses.capacity`).
-6. **`create_course_user_table`** (Pivot) — Kurs ↔ Trainer (Roster der berechtigten
-   Kursleiter für Kommentare/Updates).
+6. **`create_course_user_table`** (Pivot, **optional/deferred**) — Kurs ↔ Trainer
+   (Roster der berechtigten Kursleiter). Zurückgestellt (slim architecture):
+   Trainer-Berechtigung läuft über `courses.trainer_id` / `course_sessions.trainer_id`
+   plus die Studio-Pivot `studio_user` (siehe 9).
+9. **`create_studio_user_table`** (Pivot, Tabelle `studio_user`) — Trainer ↔ Studios
+   (n:m): `user_id` + `studio_id` FK cascade, **unique(user_id, studio_id)**.
+   `users.studio_id` gilt nur für Studio-Admins; Trainer hängen via dieser Pivot
+   an beliebig vielen Studios. Timestamp-sortiert nach `course_updates`, FK-Ziele
+   (`users`, `studios`) existieren längst.
 7. **`create_bookings_table`** — Kundenbuchungen. **(Muss VOR `course_updates` entstehen —
    siehe Hinweis.)** Fremdschlüssel auf **`course_session_id`** (nullable FK →
    `course_sessions`), nicht `course_id`. Unique auf `(user_id, course_session_id)`
@@ -83,7 +92,7 @@ Zusätzliche Felder am User: `users.role` (String, Default `customer`) und
 > Ursprünglich war `course_updates` VOR `bookings` geplant; die Reihenfolge wurde
 > getauscht, damit das FK-Ziel beim Anlegen existiert (relevant besonders für SQLite
 > `:memory:`-Testläufe, wo FK-Reihenfolgen strikt geprüft werden). Finale Kette:
-> `studios → users-alter → rooms → courses → course_sessions → bookings → course_updates`.
+> `studios → users-alter → rooms → courses → course_sessions → bookings → course_updates → studio_user`.
 
 **Kurs-Spalten im Detail:**
 
@@ -178,6 +187,13 @@ $table->string('type', 32); // 'note' | 'cancelled' | 'substitute'
 $table->text('body');
 $table->timestamps();
 $table->index('course_session_id');
+
+// 9) create_studio_user_table (Pivot Trainer ↔ Studios, n:m)
+$table->id();
+$table->foreignId('user_id')->constrained()->cascadeOnDelete();
+$table->foreignId('studio_id')->constrained()->cascadeOnDelete();
+$table->unique(['user_id', 'studio_id']); // keine Doppelzuweisung ans selbe Studio
+$table->timestamps();
 ```
 
 ## Authorization
@@ -218,11 +234,12 @@ Gate::define('bookings.manage',         fn (User $u) => true);        // jede au
   `$user->studio_id === $studio->id` (Studio-Admin des eigenen Studios). Der Admin
   umgeht das via `Gate::before` oder Admin-Zweig in der Policy.
 - **`CoursePolicy`** — `createUpdate`/`update`: Trainer dann, wenn er Lead-Trainer
-  (`courses.trainer_id === $user->id`) oder Termin-Trainer einer Session des Kurses
-  (`course_sessions.trainer_id`) ist — die Pivot `course_user` ist deferred/optional
-  (slim architecture, 2026-10-15); Studio-Admin, wenn
-  `$user->studio_id === $course->studio_id`; Admin immer. Umsetzung seit Schritt 5a
-  zusätzlich über Scopes abgesichert: `Course::assignedTo($user)->findOrFail($id)`
+  (`courses.trainer_id === $user->id`), Termin-Trainer einer Session des Kurses
+  (`course_sessions.trainer_id`) oder **via Pivot `studio_user` für das Studio des
+  Kurses freigeschaltet** ist (n:m, 2026-10-15 — die Pivot `course_user` bleibt
+  deferred/optional); Studio-Admin, wenn `$user->studio_id === $course->studio_id`
+  (nur Studio-Admins werden über `users.studio_id` ausgewertet); Admin immer.
+  Umsetzung zusätzlich über Scopes abgesichert: `Course::assignedTo($user)->findOrFail($id)`
   liefert 404 für nicht zugewiesene Trainer.
 - **`BookingPolicy`** — `view`/`delete`: Kunde nur eigene Buchungen
   (`$user->id === $booking->user_id`), Studio-Admin alle Buchungen des eigenen
@@ -285,7 +302,7 @@ Frontend.
 |---|---|---|---|
 | `admin@example.com` | `admin` | NULL | Vollzugriff; falls der User aus dem bestehenden `DatabaseSeeder` schon existiert, wird sein `role` auf `admin` promoviert (updateOrCreate statt blind firstOrCreate, weil die Migration Default `customer` setzt). |
 | `studio1@example.com` | `studio_admin` | → erstes Studio | Stammdaten-Pflege des eigenen Studios. |
-| `trainer1@example.com` | `trainer` | → erstes Studio | plus `course_user`-Zuweisung auf einen Demo-Kurs. |
+| `trainer1@example.com` | `trainer` | NULL | via Pivot `studio_user` mit dem Demo-Studio verknüpft (`syncWithoutDetaching`, idempotent). |
 | `kunde@example.com` | `customer` | NULL | plus eine Buchung auf den Demo-Kurs. |
 
 Regeln:
@@ -342,8 +359,9 @@ Regeln:
 - **Doppelbuchung → 422** — zweite Buchung desselben Users auf denselben Kurs
   (Unique-Constraint `(user_id, course_id)` als DB-Rückwand; Service liefert saubere
   422-Validation davor).
-- **Nicht zugewiesener Trainer → 404** — Trainer ohne `course_user`-Zuweisung bekommt
-  auf `/api/courses/{id}/updates` keine 403, sondern 404 (Kurs existiert für ihn nicht).
+- **Nicht zugewiesener Trainer → 404** — Trainer ohne Lead-/Vertretungs-Zuweisung und
+  ohne `studio_user`-Freischaltung bekommt auf `/api/courses/{id}/updates` keine 403,
+  sondern 404 (Kurs existiert für ihn nicht).
 - **Storno nach Fristablauf → 422** — `DELETE /api/bookings/{booking}` innerhalb 2h
   vor `starts_at` schlägt fehl.
 - **DB:** SQLite `:memory:` via `RefreshDatabase` (`phpunit.xml` setzt `DB_CONNECTION=sqlite`,
@@ -394,10 +412,13 @@ Customer-Routen (`/api/bookings`, Kurs-Listen) sind nicht studioseitig gescoped.
   `trainer_id` auf **beiden** Tabellen (nullable FK → `users`, nullOnDelete) wieder
   eingeführt: `courses.trainer_id` = regulärer Lead-Trainer, `course_sessions.trainer_id`
   = Termin-Trainer (ermöglicht Vertretung; NULL → Fallback auf Lead-Trainer). Die Pivot
-  `course_user` bleibt zusätzlich als **Roster der berechtigten Kursleiter** (Kommentare/
-  Updates), kann aber mehrere Trainer je Kurs aufnehmen — beide Konstrukte koexistieren.
-  Die alte „trainer_id wird NICHT gebaut"-Entscheidung ist mit dem Vortrages-Feature
-  obsolet.
+  `course_user` bleibt deferred/optional. **Neu (2026-10-15): Trainer arbeiten n:m
+  für mehrere Studios** via Pivot-Tabelle `studio_user` (`user_id` + `studio_id`,
+  unique) mit Relationen `User::studios()` / `Studio::trainers()`. `users.studio_id`
+  wird nur für Studio-Admins ausgewertet (Trainer: `NULL`). `CoursePolicy` erlaubt
+  Trainer-Leitung bei Lead-, Vertretungs- oder Studio-Pivot-Zuweisung; Scopes
+  (`forTenant`, `Course::assignedTo`) lösen über die Pivot auf und liefern weiter
+  404 statt 403.
 - **Kapazitäts-Kaskade / Lead-Room offene Frage:** `courses` trägt bewusst **kein**
   `room_id` (nach Nutzerabschluss). `courses.capacity` NULL soll auf „Raum-Capacity"
   zurückfallen — ein Kurs hat aber keine zugewiesene Raum-Lesebasis. Offen ist, ob (a)

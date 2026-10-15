@@ -14,8 +14,15 @@ class StudioPolicy
             return true;
         }
 
-        return $user->studio_id !== null && $user->studio_id === $studio->id
-            && in_array($user->role, [UserRole::StudioAdmin, UserRole::Trainer], true);
+        if ($user->role === UserRole::StudioAdmin) {
+            return $user->studio_id !== null && $user->studio_id === $studio->id;
+        }
+
+        if ($user->role === UserRole::Trainer) {
+            return $user->studios()->whereKey($studio->id)->exists();
+        }
+
+        return false;
     }
 
     public function update(User $user, Studio $studio): bool
