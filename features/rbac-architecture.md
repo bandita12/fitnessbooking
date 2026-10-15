@@ -59,16 +59,31 @@ Zusätzliche Felder am User: `users.role` (String, Default `customer`) und
      `Schema::table` um vier Marketing-/Bild-Felder (`description`, `thumbnail_url`,
      `image_url`, `web_link`, alle nullable) — kein Fremdschlüssel, keine
      CHECK-Constraint, reiner Laravel-Schema-Builder.
-4. **`create_courses_table`** — Kurse gehören zu Studio + optional Raum.
-5. **`create_course_user_table`** (Pivot) — Kurs ↔ Trainer (n:1-Verhältnis pro Kurs, Mehrfachzuweisung möglich).
-6. **`create_bookings_table`** — Kundenbuchungen. **(Muss VOR `course_updates` entstehen — siehe Hinweis.)**
-7. **`create_course_updates_table`** — Update-/Protokoll-Einträge zu Kursen.
+4. **`create_courses_table`** — **Arbeits-/Zeitplan (Vorlage)** des Regeltermins:
+   Studio (cascade), `trainer_id` nullable FK → `users` (nullOnDelete, Lead-Trainer),
+   Titel + Marketing-Felder, `day_of_week` (Mo=1 … So=7), `start_time`/`end_time`,
+   `capacity` unsigned, **nullable** (`NULL` = erbt vom zugewiesenen Raum).
+5. **`create_course_sessions_table`** — **konkrete Kurseinheit an einem Tag**: `course_id`
+   (cascade), `room_id` nullable (nullOnDelete, Raumwechsel pro Termin), `trainer_id`
+   nullable (nullOnDelete, Termin-Trainer / Vertretung), `date`, `status` default
+   `'scheduled'` (`scheduled|cancelled|substituted`), `session_info` nullable, `capacity`
+   nullable (`NULL` = erbt von `courses.capacity`).
+6. **`create_course_user_table`** (Pivot) — Kurs ↔ Trainer (Roster der berechtigten
+   Kursleiter für Kommentare/Updates).
+7. **`create_bookings_table`** — Kundenbuchungen. **(Muss VOR `course_updates` entstehen —
+   siehe Hinweis.)** Fremdschlüssel auf **`course_session_id`** (nullable FK →
+   `course_sessions`), nicht `course_id`. Unique auf `(user_id, course_session_id)`
+   verhindert Doppelbuchung desselben Termins.
+8. **`create_course_updates_table`** — Update-/Protokoll-Einträge zu Kursen. Fremdschlüssel
+   auf **`course_session_id`** (nullable FK → `course_sessions`); optionales
+   `booking_id` nullable FK → `bookings`.
 
 > **Abhängigkeitsnotiz:** `course_updates` referenziert `bookings` (Spalte `booking_id`
-> nullable FK → `bookings`). Ursprünglich war `course_updates` VOR `bookings` geplant;
-> die Reihenfolge wurde getauscht, damit das FK-Ziel beim Anlegen existiert (relevant
-> besonders für SQLite `:memory:`-Testläufe, wo FK-Reihenfolgen strikt geprüft werden).
-> Finale Kette: `studios → users-alter → rooms → courses → course_user → bookings → course_updates`.
+> nullable FK → `bookings`) und nun `course_sessions` (Spalte `course_session_id`).
+> Ursprünglich war `course_updates` VOR `bookings` geplant; die Reihenfolge wurde
+> getauscht, damit das FK-Ziel beim Anlegen existiert (relevant besonders für SQLite
+> `:memory:`-Testläufe, wo FK-Reihenfolgen strikt geprüft werden). Finale Kette:
+> `studios → users-alter → rooms → courses → course_sessions → course_user → bookings → course_updates`..
 
 **Kurs-Spalten im Detail:**
 
@@ -111,21 +126,37 @@ $table->decimal('length_meters', 5, 2)->nullable();
 $table->decimal('height_meters', 5, 2)->nullable();
 $table->timestamps();
 
-// 4) create_courses_table
+// 4) create_courses_table (Regeltermin / Vorlage)
 $table->id();
 $table->foreignId('studio_id')->constrained()->cascadeOnDelete();
-$table->foreignId('room_id')->nullable()->constrained('rooms')->nullOnDelete();
+$table->foreignId('trainer_id')->nullable()->constrained('users')->nullOnDelete(); // Lead-Trainer (regulär)
 $table->string('title');
 $table->text('description')->nullable();
-$table->timestamp('starts_at');
-$table->timestamp('ends_at');
-$table->unsignedInteger('capacity');
-$table->string('status', 32)->default('scheduled'); // 'scheduled' | 'cancelled'
+$table->string('thumbnail_url')->nullable();
+$table->string('image_url')->nullable();
+$table->string('web_link')->nullable();
+$table->unsignedTinyInteger('day_of_week');                 // 1 = Mo ... 7 = So (ISO)
+$table->time('start_time');
+$table->time('end_time');
+$table->unsignedInteger('capacity')->nullable();           // NULL = erbt rooms.capacity
 $table->timestamps();
 $table->index('studio_id');
-$table->index('starts_at');
+$table->index('trainer_id');
 
-// 5) create_course_user_table (Pivot: Kurs hat viele Trainer)
+// 4b) create_course_sessions_table (konkrete Einheit an Tag X)
+$table->id();
+$table->foreignId('course_id')->constrained()->cascadeOnDelete();
+$table->foreignId('room_id')->nullable()->constrained('rooms')->nullOnDelete(); // Raumwechsel pro Termin
+$table->foreignId('trainer_id')->nullable()->constrained('users')->nullOnDelete(); // Termin-Trainer (Vertretung)
+$table->date('date');
+$table->string('status', 16)->default('scheduled'); // 'scheduled' | 'cancelled' | 'substituted'
+$table->text('session_info')->nullable();
+$table->unsignedInteger('capacity')->nullable();           // NULL = erbt courses.capacity
+$table->timestamps();
+$table->index(['course_id', 'date']);
+$table->index('trainer_id');
+
+// 5) create_course_user_table (Pivot: berechtigte Trainer eines Kurses + Regeltermin-Roster)
 $table->id();
 $table->foreignId('course_id')->constrained()->cascadeOnDelete();
 $table->foreignId('user_id')->constrained()->cascadeOnDelete();
@@ -134,19 +165,19 @@ $table->unique(['course_id', 'user_id']);
 // 6) create_bookings_table
 $table->id();
 $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-$table->foreignId('course_id')->constrained()->cascadeOnDelete();
-$table->unique(['user_id', 'course_id']); // verhindert Doppelbuchung
+$table->foreignId('course_session_id')->constrained('course_sessions')->cascadeOnDelete();
+$table->unique(['user_id', 'course_session_id']); // verhindert Doppelbuchung desselben Termins
 $table->timestamps();
 
 // 7) create_course_updates_table (Protokoll: Entfall/Vertretung/Notiz)
 $table->id();
-$table->foreignId('course_id')->constrained()->cascadeOnDelete();
+$table->foreignId('course_session_id')->constrained('course_sessions')->cascadeOnDelete();
 $table->foreignId('user_id')->constrained()->cascadeOnDelete(); // Autor
 $table->foreignId('booking_id')->nullable()->constrained('bookings')->nullOnDelete();
 $table->string('type', 32); // 'note' | 'cancelled' | 'substitute'
 $table->text('body');
 $table->timestamps();
-$table->index('course_id');
+$table->index('course_session_id');
 ```
 
 ## Authorization
@@ -266,18 +297,29 @@ Regeln:
 ## Fachlogik
 
 - **Kapazitätsregel:** Eine Buchung ist nur erfolgreich, solange
-  `bookings->where('course_id', $course->id)->count() < $course->capacity`.
-  Bei vollständig belegtem Kurs → **422** (Validierungsfehler „Kurs ausgebucht").
+  `bookings->where('course_session_id', $courseSession->id)->count() < $courseSession->capacity`.
+  `$courseSession->capacity` löst über die Kaskade auf (erstes Nicht-NULL wins):
+  `session.capacity ?? course.capacity ?? room.capacity` → das zugewiesene effective
+  Capacity ist der Reservierungs-Peak. Bei vollständig belegtem Termin →
+  **422** (Validierungsfehler „Kurs ausgebucht").
+- **Kapazitäts-Kaskade (Dreistufig):** `rooms.capacity → courses.capacity (nullable) →
+  course_sessions.capacity (nullable)`. Erstes Nicht-NULL wins; NULL auf einer Stufe
+  weicht auf die vorige Stufe zurück. Trainer-Override pro Termin: `course_sessions.trainer_id`
+  NULL → Fallback `courses.trainer_id` (Lead-Trainer).
 - **Stornofrist:** Ein Kunde darf seine Buchung kostenlos entfernen, solange
-  `now() <= $course->starts_at->subHours(2)` („bis 2 Stunden vor Kursbeginn").
+  `now() <= $sessionStartsAt->subHours(2)` („bis 2 Stunden vor Kursbeginn");
+  Der Startzeitpunkt des Termins ergibt sich aus `course_sessions.date`
+  (Tag des Termins) plus `courses.start_time` (Recurring start window).
   Danach → **422**. Es gibt keine Zahlungsintegration; „kostenlos" ist hier reines
   Zeitfenster, keine Gebührenlogik.
-- **Kurs-Status als Aggregat:** `courses.status` ∈ `scheduled | cancelled`. Postet ein
-  Trainer/Studio-Admin ein `course_updates`-Element vom Typ `cancelled`, wird der Kurs-
-  Status auf `cancelled` gesetzt **und** der Eintrag im `course_updates`-Log
-  protokolliert (Statusänderungen werden in das Update-Log gespiegelt; das Log ist die
-  Audit-Trail, `status` der schnelle Lesezugriff). Typen: `note` (Kommentar/
-  Präzisierung), `cancelled` (Entfall), `substitute` (Vertretung).
+- **Kurs-Status als Aggregat:** `course_sessions.status` ∈ `scheduled | cancelled
+  | substituted` (das frühere, reine `course`-Statusfeld entfällt; Status ist eine
+  Eigenschaft der konkreten Einheit). Postet ein Trainer/Studio-Admin ein
+  `course_updates`-Element vom Typ `cancelled`/`substitute`, wird der Terminstatus
+  entsprechend gesetzt **und** der Eintrag im `course_updates`-Log protokolliert
+  (Statusänderungen werden in das Update-Log gespiegelt; das Log ist die Audit-Trail,
+  `status` der schnelle Lesezugriff). Typen: `note` (Kommentar/Präzisierung),
+  `cancelled` (Entfall), `substitute` (Vertretung).
 
 ## Tests
 
@@ -332,10 +374,22 @@ Customer-Routen (`/api/bookings`, Kurs-Listen) sind nicht studioseitig gescoped.
 
 ## Offene Punkte
 
-- **Abweichung von früherem Wunsch (`trainer_id` → Pivot):** Eine frühere Anforderung
-  sah eine Spalte `trainer_id` direkt auf `courses` vor. Finale Entscheidung: die
-  Pivot-Tabelle `course_user` — damit sind **mehrere Trainer pro Kurs** möglich
-  (future-proof für Vertretungen, mehrgleisige Kurse). `trainer_id` wird NICHT gebaut.
+- **Abweichung revidiert — `trainer_id` inzwischen wieder eingeführt (2026-10-15):**
+  Mit der Aufspaltung in `courses` (Regeltermin) + `course_sessions` (Tagesinstanz) wurde
+  `trainer_id` auf **beiden** Tabellen (nullable FK → `users`, nullOnDelete) wieder
+  eingeführt: `courses.trainer_id` = regulärer Lead-Trainer, `course_sessions.trainer_id`
+  = Termin-Trainer (ermöglicht Vertretung; NULL → Fallback auf Lead-Trainer). Die Pivot
+  `course_user` bleibt zusätzlich als **Roster der berechtigten Kursleiter** (Kommentare/
+  Updates), kann aber mehrere Trainer je Kurs aufnehmen — beide Konstrukte koexistieren.
+  Die alte „trainer_id wird NICHT gebaut"-Entscheidung ist mit dem Vortrages-Feature
+  obsolet.
+- **Kapazitäts-Kaskade / Lead-Room offene Frage:** `courses` trägt bewusst **kein**
+  `room_id` (nach Nutzerabschluss). `courses.capacity` NULL soll auf „Raum-Capacity"
+  zurückfallen — ein Kurs hat aber keine zugewiesene Raum-Lesebasis. Offen ist, ob (a)
+  ein optionales `default_room_id` ergänzt oder (b) die Inheritance erst auf Model-
+  Ebene über die Standard-Session entfällt (`first non-null win: session → course → null`,
+  Room-Kapazität nur an Session verbindlich). Die Datenbank hat die NULL-Semantik; die
+  Regel wird im Model implementiert.
 - **Rollen-Modell-Abweichung:** TODO-Akzeptanzkriterium 1 nennt „Tabelle `roles` ODER
   Role-Feld"; gewählt wurde das String-Enum-Feld (`App\Enums\UserRole`). Keine
   `roles`-Tabelle.

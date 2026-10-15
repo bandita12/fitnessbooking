@@ -51,8 +51,8 @@ Implementierung eines rollenbasierten Zugriffssystems (Admins, Studio-Admins, Ku
 
 1. **Rollen:** Enum-Einzelrolle — String-Spalte `users.role` + `App\Enums\UserRole` (`admin`, `studio_admin`, `trainer`, `customer`); **keine** `roles`-Tabelle.
 2. **Auth:** Laravel Sanctum **SPA-Cookie-Modus** (nicht Token); Frontend-Origin in `sanctum.stateful`, Axios `withCredentials` + XSRF; behebt den 500er `Route [login] not defined`.
-3. **Kapazität/Storno:** `courses.capacity` + `starts_at`/`ends_at`; kostenloses Storno bis 2 h vor Beginn (`now() <= starts_at->subHours(2)`).
-4. **Trainer-Zuweisung:** Pivot `course_user` (unique course_id+user_id) — **nicht** `trainer_id` auf `courses` (Abweichung vom ersten Wunsch, im Plan dokumentiert).
+3. **Regeltermin / Tagesinstanz:** `courses` (Vorlage: day_of_week, start_time, end_time, capacity nullable) + `course_sessions` (date, room_id nullable, trainer_id für Vertretung, status, session_info, capacity nullable). Capacity-Kaskade `room→course→session` (erstes Nicht-NULL). Buchungen und `course_updates` referenzieren `course_session_id`. Storno bis 2 h vor Termin-Beginn.
+4. **Trainer-Zuweisung (revidiert 2026-10-15):** `trainer_id` auf `courses` (Lead-Trainer) und `course_sessions` (Termin-Trainer / Vertretung) eingeführt, plus die Roster-Pivot `course_user` für Kommentar-Berechtigung. Die ältere „trainer_id wird NICHT gebaut"-Entscheidung ist damit superseded; beide Konstrukte koexistieren.
 
 ### ✅ Umsetzungsplan (Reihenfolge einhalten: `course_updates` braucht `bookings`)
 
@@ -63,10 +63,12 @@ Implementierung eines rollenbasierten Zugriffssystems (Admins, Studio-Admins, Ku
 #### Schritt 2 — Migrationen 2–7 (je ein Commit, portabel PG/SQLite, `down()` leer)
 - [ ] `add_role_and_studio_id_to_users` — `role` string(32) default `customer`, `studio_id` nullable FK → studios nullOnDelete + Index
 - [ ] `create_rooms_table` — `studio_id` FK cascade, `name`, `capacity` unsignedInteger
-- [ ] `create_courses_table` — `studio_id` FK cascade, `room_id` nullable FK nullOnDelete, `title`, `description` text nullable, `starts_at`, `ends_at`, `capacity`, `status` string(32) default `scheduled`; Index studio_id + starts_at
-- [ ] `create_course_user_table` — Pivot Trainer, `course_id` + `user_id` FK cascade, **unique(course_id, user_id)**
-- [ ] `create_bookings_table` — `user_id` + `course_id` FK cascade, **unique(user_id, course_id)** (keine Doppelbuchung)
-- [ ] `create_course_updates_table` — `course_id`, `user_id` (Autor), `booking_id` nullable FK nullOnDelete, `type` (`note|cancelled|substitute`), `body`; Index course_id
+- [ ] `create_courses_table` — `studio_id` FK cascade, `trainer_id` nullable FK nullOnDelete (Lead-Trainer), `title`, `description`/`thumbnail_url`/`image_url`/`web_link` nullable, `day_of_week` unsigned tiny, `start_time`/`end_time` time, `capacity` nullable; Index studio_id + trainer_id
+- [ ] `create_course_sessions_table` — `course_id` FK cascade, `room_id` nullable FK nullOnDelete, `trainer_id` nullable FK nullOnDelete (Termin-Trainer), `date`, `status` string(16) default `scheduled`, `session_info` nullable, `capacity` nullable; Index (course_id, date) + trainer_id
+- [ ] `create_course_user_table` — Pivot Trainer-Roster, `course_id` + `user_id` FK cascade, **unique(course_id, user_id)**
+- [ ] `create_bookings_table` — `user_id` FK cascade, `course_session_id` FK cascade, **unique(user_id, course_session_id)** (keine Doppelbuchung desselben Termins)
+- [ ] `create_course_updates_table` — `course_session_id` FK cascade, `user_id` (Autor), `booking_id` nullable FK nullOnDelete, `type` (`note|cancelled|substitute`), `body`; Index course_session_id
+- **Hinweis (Kurs-Modell):** Regeltermin `courses` (Vorlage) + konkrete Einheit `course_sessions` (Tagesinstanz); Trainer-Zuordnung `trainer_id` auf beiden (course_sessions-Trainer ermöglicht Vertretung). Bookings & course_updates referenzieren ab sofort `course_session_id` statt `course_id`.
 
 #### Schritt 3 — Modelle & Enums
 - [ ] `App\Enums\UserRole` (+ `CourseStatus`, `CourseUpdateType`); Cast auf `User::role`
