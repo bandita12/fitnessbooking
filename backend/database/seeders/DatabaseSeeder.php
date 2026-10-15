@@ -12,14 +12,15 @@ class DatabaseSeeder extends Seeder
 
     /**
      * Seed the application's database.
+     *
+     * Runs RolesAndUsersSeeder einmal idempotent — nur wenn die users-Tabelle
+     * komplett leer ist, damit bestehende Dev-Daten niemals überschrieben werden.
      */
     public function run(): void
     {
-        // User::factory(10)->create();
-
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        if (User::count() === 0) {
+            $this->call(RolesAndUsersSeeder::class);
+        }
+        // Falls später weitere Seed-Klassen hinzukommen, können sie hier ergänzt werden.
     }
 }
