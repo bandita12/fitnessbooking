@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BookingController;
 use App\Http\Controllers\Api\CourseController;
 use App\Http\Controllers\Api\CourseSessionController;
@@ -13,6 +14,12 @@ Route::get('/fitness-test', FitnessTestController::class);
 Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:sanctum');
+
+Route::middleware('web')->group(function (): void {
+    Route::post('/auth/login', [AuthController::class, 'login']);
+    Route::post('/auth/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
+    Route::get('/me', [AuthController::class, 'me'])->middleware('auth:sanctum');
+});
 
 Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('/studios', [StudioController::class, 'index'])->can('courses.view');

@@ -257,8 +257,12 @@ Frontend.
 **Scaffold-Anforderungen:**
 
 - Routen: `GET /sanctum/csrf-cookie` (Sanctum-Controller, gibt XSRF-Cookie aus),
-  `POST /api/login`, `POST /api/logout`, `GET /api/me`. Authentifizierte Routen hängen
-  hinter `auth:sanctum`.
+  `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/me` (`AuthController`,
+  umgesetzt in Schritt 4). Authentifizierte Routen hängen hinter `auth:sanctum`;
+  die Auth-Routen tragen zusätzlich die `web`-Middleware (Session für den
+  Cookie-Flow). `api/*` ist von der CSRF-Prüfung ausgenommen (Same-Site-SPA mit
+  Lax-Cookies); `AuthenticationException` auf `api/*` rendert immer `401`-JSON —
+  damit ist der `Route [login] not defined`-500er behoben.
 - `config/sanctum.php`: `stateful` muss die Dev-Origin enthalten:
   `http://localhost:5173` (und `http://127.0.0.1:5173`). Produktions-Origin ergänzen,
   sobald Deployment steht (siehe Offene Punkte).
@@ -353,9 +357,9 @@ Regeln:
 | Route | Methoden | Middleware / Gate | Policy |
 |---|---|---|---|
 | `GET /sanctum/csrf-cookie` | GET | — (Sanctum) | — |
-| `POST /api/login` | POST | — (+ Throttle) | — |
-| `POST /api/logout` | POST | `auth:sanctum` | — |
-| `GET /api/me` | GET | `auth:sanctum` | — |
+| `POST /api/auth/login` | POST | `web` (Session) | — |
+| `POST /api/auth/logout` | POST | `web` + `auth:sanctum` | — |
+| `GET /api/me` | GET | `web` + `auth:sanctum` | — |
 | `GET /api/studios` | GET | `auth:sanctum` + `can:courses.view` | — |
 | `GET /api/studios/{id}/courses` | GET | `auth:sanctum` + `can:courses.view` | — |
 | `POST /api/admin/studios` | POST | `auth:sanctum` + `can:studios.manage` | — |

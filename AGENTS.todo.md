@@ -75,7 +75,9 @@ Implementierung eines rollenbasierten Zugriffssystems (Admins, Studio-Admins, Ku
 - [ ] Models + Relations: `Studio`, `Room`, `Course` (Trainer über `courses.trainer_id` und `course_sessions.trainer_id`; pivot `course_user` optional, später nachrüstbar), `CourseUpdate`, `Booking`; `User`: `studio()`, `taughtCourses()` via optional Pivot
 
 #### Schritt 4 — Auth (Sanctum SPA)
-- [ ] `/api/login`, `/api/logout`, `/api/me` Routen; `sanctum.stateful` enthält `localhost:5173`/`127.0.0.1:5173`; produktive Origin ist OFFEN (Deploy-Reminder)
+- [x] `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/me` (AuthController, Session-Cookie via `web`-Middleware); `SANCTUM_STATEFUL_DOMAINS` enthält `localhost:5173`/`127.0.0.1:5173` (`.env` + `.env.example`); produktive Origin ist OFFEN (Deploy-Reminder)
+- [x] 401-statt-500: `AuthenticationException` auf `api/*` rendert immer `401`-JSON (kein Redirect auf nichtexistente `login`-Route); `api/*` von CSRF ausgenommen (Same-Site-SPA, Lax-Cookies)
+- [x] Regressionstest `tests/Feature/AuthApiTest.php` (6 Tests: Login ok/422, `/api/me` 200 + Gast-401-JSON, Logout zerstört Session) — SQLite + Wegwerf-PostgreSQL
 - [ ] Axios-Client: `withCredentials: true` + XSRF-Token-Header; Auth-Context im Frontend (Rolle + `studio_id`)
 - [ ] Hinweis: `course_updates` ist das **einzige** Änderungs-Protokoll für Kurse (kein Audit-Feld am Course)
 
