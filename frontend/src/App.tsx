@@ -1,160 +1,57 @@
-import { useEffect, useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import api from './lib/api'
-import fetchFitnessTest, { type FitnessTestData } from './utils/fetchFitnessTest'
-import './App.css'
+import Login from './components/Login'
+import ProtectedRoute from './components/ProtectedRoute'
+import { AuthProvider } from './context/AuthContext'
+import { useAuth } from './context/useAuth'
+import CoursesPage from './pages/CoursesPage'
+import DashboardPage from './pages/DashboardPage'
 
-function App() {
-  const [count, setCount] = useState(0)
-  const [fitnessTest, setFitnessTest] = useState<FitnessTestData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+function Shell() {
+  const { user, loading, logout } = useAuth()
 
-  useEffect(() => {
-    let active = true
-    fetchFitnessTest()
-      .then((data: FitnessTestData) => {
-        if (active) setFitnessTest(data)
-      })
-      .catch((err: unknown) => {
-        if (active) {
-          setError(err instanceof Error ? err.message : 'Unbekannter Fehler')
-        }
-      })
-      .finally(() => {
-        if (active) setLoading(false)
-      })
-    return () => {
-      active = false
-    }
-  }, [])
+  if (loading) {
+    return <p className="p-8 text-center text-gray-600">Wird geladen …</p>
+  }
+
+  if (user === null) {
+    return <Login />
+  }
+
+  const isStaff = user.role === 'admin' || user.role === 'studio_admin'
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
+    <div className="min-h-screen bg-gray-50">
+      <header className="flex items-center justify-between bg-white px-8 py-4 shadow-sm">
+        <span className="font-semibold text-gray-900">Fitnessbooking</span>
+        <div className="flex items-center gap-4">
+          <span className="text-sm text-gray-600">
+            {user.name} ({user.role})
+          </span>
+          <button
+            type="button"
+            onClick={() => void logout()}
+            className="rounded-md border border-gray-300 px-3 py-1 text-sm text-gray-700 hover:bg-gray-100"
+          >
+            Abmelden
+          </button>
         </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-          <p>API-Basis-URL: {String(api.defaults.baseURL)}</p>
-          {loading && <p>Lade ...</p>}
-          {error !== null && <p>Fehler: {error}</p>}
-          {fitnessTest !== null && (
-            <ul>
-              <li>Service: {fitnessTest.service}</li>
-              <li>Status: {fitnessTest.status}</li>
-              <li>Nachricht: {fitnessTest.message}</li>
-              <li>
-                Zeitstempel:{' '}
-                {new Date(fitnessTest.timestamp).toLocaleString('de-DE')}
-              </li>
-            </ul>
-          )}
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+      </header>
+      {isStaff ? (
+        <ProtectedRoute allowedRoles={['admin', 'studio_admin']}>
+          <DashboardPage />
+        </ProtectedRoute>
+      ) : (
+        <ProtectedRoute allowedRoles={['trainer', 'customer']}>
+          <CoursesPage />
+        </ProtectedRoute>
+      )}
+    </div>
   )
 }
 
-export default App
+export default function App() {
+  return (
+    <AuthProvider>
+      <Shell />
+    </AuthProvider>
+  )
+}

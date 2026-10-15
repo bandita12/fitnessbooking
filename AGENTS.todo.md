@@ -120,4 +120,8 @@ Implementierung eines rollenbasierten Zugriffssystems (Admins, Studio-Admins, Ku
 - [ ] **Migrations-Guard:** eine Feature-Test mit `RefreshDatabase`, die die volle Migrationskette auf SQLite läuft (Begründung: die Suite hatte bisher kein `RefreshDatabase` — Migrationen wurden von `php artisan test` nie ausgeführt; die Portabilitäts-Messungen liefen ad hoc auf Wegwerf-DBs. Für Schritte 3–7 gehört das als Regressionstest in die Suite.)
 
 #### Schritt 9 — Frontend (nach Backend)
-- [ ] Auth-Context (Rolle + studio_id), `<ProtectedRoute allowedRoles={[...]} />`, Rollen-basiertes Ausblenden von UI-Elementen
+- [x] Axios-Client `src/api/client.ts` (baseURL `http://localhost:8000` via `VITE_API_BASE_URL`, `withCredentials` + `withXSRFToken`) + `src/api/auth.ts` (login/logout/me, CSRF-Cookie vor Login); alter `src/lib/api.ts` entfernt
+- [x] Auth-Context (Rolle + studio_id): `AuthProvider` lädt `/api/me` beim Start, `useAuth`-Hook, `Login`/`Logout`, Tailwind-`Login`-Formular mit 422-Fehlermeldung
+- [x] `<ProtectedRoute allowedRoles={[...]} />`; Rollen-Views: Staff (admin/studio_admin) → `DashboardPage`, Trainer/Customer → `CoursesPage`; Header mit Name/Rolle + Abmelden-Button
+- [x] Tailwind CSS v4 (`@tailwindcss/vite`); `pnpm lint` (oxlint) sauber, `pnpm build` (`tsc -b` + vite) grün
+- [ ] Offen: Kurslisten-/Buchungs-UI (API-Anbindung `CoursesPage`), Studio-Verwaltungs-UI (`DashboardPage`), E2E (Playwright-Tags) und Vitest-Setup für Frontend-Logik
