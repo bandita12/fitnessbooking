@@ -83,7 +83,7 @@ Zusätzliche Felder am User: `users.role` (String, Default `customer`) und
 > Ursprünglich war `course_updates` VOR `bookings` geplant; die Reihenfolge wurde
 > getauscht, damit das FK-Ziel beim Anlegen existiert (relevant besonders für SQLite
 > `:memory:`-Testläufe, wo FK-Reihenfolgen strikt geprüft werden). Finale Kette:
-> `studios → users-alter → rooms → courses → course_sessions → course_user → bookings → course_updates`..
+> `studios → users-alter → rooms → courses → course_sessions → bookings → course_updates`.
 
 **Kurs-Spalten im Detail:**
 
@@ -156,13 +156,13 @@ $table->timestamps();
 $table->index(['course_id', 'date']);
 $table->index('trainer_id');
 
-// 5) create_course_user_table (Pivot: berechtigte Trainer eines Kurses + Regeltermin-Roster)
+// 5) create_course_user_table (Pivot: berechtigte Trainer eines Kurses – derzeit optional; Trainer-ID geführt über courses.trainer_id und course_sessions.trainer_id, Pivot kann bei Bedarf nachgerüstet werden)
 $table->id();
 $table->foreignId('course_id')->constrained()->cascadeOnDelete();
 $table->foreignId('user_id')->constrained()->cascadeOnDelete();
 $table->unique(['course_id', 'user_id']);
 
-// 6) create_bookings_table
+// 5) create_bookings_table
 $table->id();
 $table->foreignId('user_id')->constrained()->cascadeOnDelete();
 $table->foreignId('course_session_id')->constrained('course_sessions')->cascadeOnDelete();

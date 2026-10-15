@@ -65,14 +65,14 @@ Implementierung eines rollenbasierten Zugriffssystems (Admins, Studio-Admins, Ku
 - [ ] `create_rooms_table` — `studio_id` FK cascade, `name`, `capacity` unsignedInteger
 - [ ] `create_courses_table` — `studio_id` FK cascade, `trainer_id` nullable FK nullOnDelete (Lead-Trainer), `title`, `description`/`thumbnail_url`/`image_url`/`web_link` nullable, `day_of_week` unsigned tiny, `start_time`/`end_time` time, `capacity` nullable; Index studio_id + trainer_id
 - [ ] `create_course_sessions_table` — `course_id` FK cascade, `room_id` nullable FK nullOnDelete, `trainer_id` nullable FK nullOnDelete (Termin-Trainer), `date`, `status` string(16) default `scheduled`, `session_info` nullable, `capacity` nullable; Index (course_id, date) + trainer_id
-- [ ] `create_course_user_table` — Pivot Trainer-Roster, `course_id` + `user_id` FK cascade, **unique(course_id, user_id)**
+- [ ] `create_course_user_table` — Optional (slim, 2026-10-15): Pivot Trainer-Roster zurzeit nicht implementiert; `trainer_id` auf `courses` und `course_sessions` genügt für Lead-Trainer und Vertretung. Nachrüstung bei Mehr-Trainer-Kursen möglich.
 - [ ] `create_bookings_table` — `user_id` FK cascade, `course_session_id` FK cascade, **unique(user_id, course_session_id)** (keine Doppelbuchung desselben Termins)
 - [ ] `create_course_updates_table` — `course_session_id` FK cascade, `user_id` (Autor), `booking_id` nullable FK nullOnDelete, `type` (`note|cancelled|substitute`), `body`; Index course_session_id
 - **Hinweis (Kurs-Modell):** Regeltermin `courses` (Vorlage) + konkrete Einheit `course_sessions` (Tagesinstanz); Trainer-Zuordnung `trainer_id` auf beiden (course_sessions-Trainer ermöglicht Vertretung). Bookings & course_updates referenzieren ab sofort `course_session_id` statt `course_id`.
 
 #### Schritt 3 — Modelle & Enums
 - [ ] `App\Enums\UserRole` (+ `CourseStatus`, `CourseUpdateType`); Cast auf `User::role`
-- [ ] Models + Relations: `Studio`, `Room`, `Course` (trainers belongsToMany via `course_user`, room belongsTo, studio belongsTo), `CourseUpdate`, `Booking`; `User`: `studio()`, `taughtCourses()` via Pivot
+- [ ] Models + Relations: `Studio`, `Room`, `Course` (Trainer über `courses.trainer_id` und `course_sessions.trainer_id`; pivot `course_user` optional, später nachrüstbar), `CourseUpdate`, `Booking`; `User`: `studio()`, `taughtCourses()` via optional Pivot
 
 #### Schritt 4 — Auth (Sanctum SPA)
 - [ ] `/api/login`, `/api/logout`, `/api/me` Routen; `sanctum.stateful` enthält `localhost:5173`/`127.0.0.1:5173`; produktive Origin ist OFFEN (Deploy-Reminder)
