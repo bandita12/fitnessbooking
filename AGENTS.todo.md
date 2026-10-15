@@ -93,6 +93,7 @@ Implementierung eines rollenbasierten Zugriffssystems (Admins, Studio-Admins, Ku
 
 #### Schritt 8 — Tests
 - [ ] Matrix Rolle × Route: erlaubt, eigenes Studio, Fremd-Studio → 404, Doppelbuchung → 422, Storno nach Frist → 422, Trainer ohne Zuweisung → 404; SQLite `:memory:` + `RefreshDatabase`; Auth-Helper auf Base-`TestCase`
+- [ ] **Migrations-Guard:** eine Feature-Test mit `RefreshDatabase`, die die volle Migrationskette auf SQLite läuft (Begründung: die Suite hatte bisher kein `RefreshDatabase` — Migrationen wurden von `php artisan test` nie ausgeführt; die Portabilitäts-Messungen liefen ad hoc auf Wegwerf-DBs. Für Schritte 3–7 gehört das als Regressionstest in die Suite.)
 
 #### Schritt 9 — Frontend (nach Backend)
 - [ ] Auth-Context (Rolle + studio_id), `<ProtectedRoute allowedRoles={[...]} />`, Rollen-basiertes Ausblenden von UI-Elementen
