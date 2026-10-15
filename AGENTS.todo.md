@@ -124,4 +124,5 @@ Implementierung eines rollenbasierten Zugriffssystems (Admins, Studio-Admins, Ku
 - [x] Auth-Context (Rolle + studio_id): `AuthProvider` lädt `/api/me` beim Start, `useAuth`-Hook, `Login`/`Logout`, Tailwind-`Login`-Formular mit 422-Fehlermeldung
 - [x] `<ProtectedRoute allowedRoles={[...]} />`; Rollen-Views: Staff (admin/studio_admin) → `DashboardPage`, Trainer/Customer → `CoursesPage`; Header mit Name/Rolle + Abmelden-Button
 - [x] Tailwind CSS v4 (`@tailwindcss/vite`); `pnpm lint` (oxlint) sauber, `pnpm build` (`tsc -b` + vite) grün
-- [ ] Offen: Kurslisten-/Buchungs-UI (API-Anbindung `CoursesPage`), Studio-Verwaltungs-UI (`DashboardPage`), E2E (Playwright-Tags) und Vitest-Setup für Frontend-Logik
+- [x] Studio-/Admin-Verwaltung (2026-10-15): `DashboardPage` mit Tabs (Studios verwalten / Studio-Admins); `GET /api/admin/studios`-Liste, Studio-Create-Formular (Marketing-Felder), Admin-Create-Formular (Rolle hart `studio_admin`, 422-Mapping); Backend: `GET /api/admin/studios`, `POST /api/admin/users` (`Admin\UserController`) + `AdminApiTest` (6 Tests)
+- [ ] Offen: Kurslisten-/Buchungs-UI (API-Anbindung `CoursesPage`), Studio-Verwaltungs-UI für Studio-Admins, `PUT /api/admin/users`, E2E (Playwright-Tags) und Vitest-Setup für Frontend-Logik

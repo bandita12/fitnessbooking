@@ -21,6 +21,10 @@ class StudioController extends Controller
             'street' => ['required', 'string', 'max:255'],
             'zip' => ['required', 'string', 'max:32'],
             'city' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string'],
+            'thumbnail_url' => ['nullable', 'string', 'max:255'],
+            'image_url' => ['nullable', 'string', 'max:255'],
+            'web_link' => ['nullable', 'string', 'max:255'],
         ]);
 
         return response()->json(Studio::create($data), 201);

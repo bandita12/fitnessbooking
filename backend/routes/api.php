@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BookingController;
 use App\Http\Controllers\Api\CourseController;
@@ -23,7 +24,9 @@ Route::middleware('web')->group(function (): void {
 
 Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('/studios', [StudioController::class, 'index'])->can('courses.view');
+    Route::get('/admin/studios', [StudioController::class, 'index'])->can('studios.manage');
     Route::post('/admin/studios', [StudioController::class, 'store'])->can('studios.manage');
+    Route::post('/admin/users', [AdminUserController::class, 'store'])->can('users.assign-roles');
     Route::put('/admin/studios/{studio}', [StudioController::class, 'update'])->can('studios.manage');
     Route::delete('/admin/studios/{studio}', [StudioController::class, 'destroy'])->can('studios.manage');
     Route::put('/studios/{studio}/details', [StudioController::class, 'update'])->can('studios.update');
