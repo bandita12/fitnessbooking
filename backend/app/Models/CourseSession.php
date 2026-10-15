@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CourseSession extends Model
 {
@@ -33,5 +35,34 @@ class CourseSession extends Model
     public function trainer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'trainer_id');
+    }
+
+    public function room(): BelongsTo
+    {
+        return $this->belongsTo(Room::class);
+    }
+
+    public function bookings(): HasMany
+    {
+        return $this->hasMany(Booking::class, 'course_session_id');
+    }
+
+    /**
+     * Session start as a datetime (session date + course start time).
+     */
+    public function startsAt(): Carbon
+    {
+        return Carbon::parse($this->date->format('Y-m-d').' '.$this->course->start_time);
+    }
+
+    /**
+     * Capacity cascade: first non-null wins
+     * (session → course → room).
+     */
+    public function effectiveCapacity(): ?int
+    {
+        return $this->capacity
+            ?? $this->course->capacity
+            ?? $this->room?->capacity;
     }
 }

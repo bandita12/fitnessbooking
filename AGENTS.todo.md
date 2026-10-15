@@ -99,6 +99,15 @@ Implementierung eines rollenbasierten Zugriffssystems (Admins, Studio-Admins, Ku
 - [ ] Kursleiter: `/api/courses/{id}/updates`
 - [ ] Kunde: `/api/bookings` (POST/DELETE) — inkl. Kapazitäts- und Stornofrist-Prüfung
 
+#### Schritt 6a — API-Routen & BookingPolicy (2026-10-15)
+- [x] `BookingPolicy` (`view`/`delete`): Kunde nur eigene, Studio-Admin nur eigenes Studio (via `session.course.studio_id`), Admin alles; Trainer kein Zugriff
+- [x] 2h-Stornofrist: `Booking::isCancellable()` (`now() <= startsAt - 2h`); Policy-`delete` prüft nur Wer-darf, Controller liefert bei Fristablauf **422** (nicht 403)
+- [x] `CourseSession::startsAt()` (date + `courses.start_time`) und `effectiveCapacity()` (Kaskade session → course → room)
+- [x] Controller: `StudioController`, `CourseController`, `CourseSessionController`, `BookingController` (minimal, tenant-scoped `findOrFail` → 404); Basis-`Controller` mit `AuthorizesRequests`; `HasApiTokens` auf `User`
+- [x] `routes/api.php`: Studios-/Courses-/Sessions-/Bookings-Routen mit `auth:sanctum` + `can:`-Middleware je Capability
+- [x] Regressionstest `tests/Feature/BookingApiTest.php` (10 Tests: Buchen, Doppelbuchung → 422, ausgebucht → 422, cancelled → 422, Storno >2h → 204, Storno <2h → 422, Fremd-Buchung → 404, Index-Scoping, Studio-Admin-Storno, Gast → 401) — SQLite + Wegwerf-PostgreSQL
+- [ ] Offen: Rooms-CRUD-Routen (braucht `Room`-Modell-Vervollständigung — Modell existiert minimal), `/courses/{id}/updates`-Endpoints (braucht `CourseUpdate`-Modell), `/api/admin/users`, Login/Logout/Me (Schritt 4 Auth)
+
 #### Schritt 7 — Seeder
 - [ ] `RolesAndUsersSeeder`: je Rolle ein Test-User (`firstOrCreate`), Seed-if-fresh-Guard; danach `php artisan migrate --seed` gegen pgsql
 

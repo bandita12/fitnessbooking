@@ -224,9 +224,12 @@ Gate::define('bookings.manage',         fn (User $u) => true);        // jede au
   `$user->studio_id === $course->studio_id`; Admin immer. Umsetzung seit Schritt 5a
   zusätzlich über Scopes abgesichert: `Course::assignedTo($user)->findOrFail($id)`
   liefert 404 für nicht zugewiesene Trainer.
-- **`BookingPolicy`** — `delete` (Austragen): Ownership, `$user->id === $booking->user_id`.
-  (Austragen der eigenen Buchung ist kein Rollenprivileg, sondern Ownership-ChECK —
-  zusätzlich gilt das 2-Stunden-Fenster, siehe Fachlogik.)
+- **`BookingPolicy`** — `view`/`delete`: Kunde nur eigene Buchungen
+  (`$user->id === $booking->user_id`), Studio-Admin alle Buchungen des eigenen
+  Studios (via `session.course.studio_id`), Admin alles, Trainer keine.
+  (Austragen der eigenen Buchung ist kein Rollenprivileg, sondern Ownership-Check.)
+  Das 2-Stunden-Fenster prüft NICHT die Policy, sondern `Booking::isCancellable()`
+  im Controller → Fristablauf liefert **422** (Validierung), nicht 403.
 
 **Route-Middleware:** Capabilities werden über `->can('...')` an die Route gebunden,
 z. B. `Route::post('/studios', ...)->can('studios.manage');`. Damit scheitert die
@@ -367,6 +370,10 @@ Regeln:
 | `POST /api/studios/{studio}/courses` | POST | `auth:sanctum` + `can:courses.manage` | `StudioPolicy` (studio_id) |
 | `PUT /api/studios/{studio}/courses/{course}` | PUT | `auth:sanctum` + `can:courses.manage` | `StudioPolicy` (studio_id) |
 | `DELETE /api/studios/{studio}/courses/{course}` | DELETE | `auth:sanctum` + `can:courses.manage` | `StudioPolicy` (studio_id) |
+| `GET /api/studios/{studio}/courses/{course}/sessions` | GET | `auth:sanctum` + `can:courses.view` | `StudioPolicy` (studio_id) |
+| `POST /api/studios/{studio}/courses/{course}/sessions` | POST | `auth:sanctum` + `can:courses.manage` | `CoursePolicy` (update) |
+| `DELETE /api/studios/{studio}/courses/{course}/sessions/{session}` | DELETE | `auth:sanctum` + `can:courses.manage` | `CoursePolicy` (update) |
+| `GET /api/bookings` | GET | `auth:sanctum` + `can:bookings.manage` | `BookingPolicy` (view, via Scope) |
 | `POST /api/courses/{course}/updates` | POST | `auth:sanctum` + `can:course-updates.create` | `CoursePolicy` (Pivot/Studio) |
 | `PUT /api/courses/{course}/updates/{update}` | PUT | `auth:sanctum` + `can:course-updates.create` | `CoursePolicy` (Pivot/Studio) |
 | `POST /api/bookings` | POST | `auth:sanctum` + `can:bookings.manage` | — (Kapazität + Unique) |

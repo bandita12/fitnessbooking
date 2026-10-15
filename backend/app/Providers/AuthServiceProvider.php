@@ -3,9 +3,11 @@
 namespace App\Providers;
 
 use App\Enums\UserRole;
+use App\Models\Booking;
 use App\Models\Course;
 use App\Models\Studio;
 use App\Models\User;
+use App\Policies\BookingPolicy;
 use App\Policies\CoursePolicy;
 use App\Policies\StudioPolicy;
 use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
@@ -16,6 +18,7 @@ class AuthServiceProvider extends ServiceProvider
     protected $policies = [
         Studio::class => StudioPolicy::class,
         Course::class => CoursePolicy::class,
+        Booking::class => BookingPolicy::class,
     ];
 
     public function boot(): void
