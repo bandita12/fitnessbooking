@@ -197,7 +197,7 @@ Die Route prüft beides: `->can('capability')` für die Rolle, `authorize()`/Pol
 | `courses.manage` | ✅ | ✅ (nur eigenes Studio) | ❌ | ❌ |
 | `course-updates.create` | ✅ | ✅ | ✅ (nur zugewiesene Kurse) | ❌ |
 | `courses.view` | ✅ | ✅ | ✅ | ✅ (alle Studios) |
-| `bookings.manage` | ✅ | ❌ | ❌ | ✅ |
+| `bookings.manage` | ✅ | ✅ | ✅ | ✅ (Feinscoping in `BookingPolicy`: Ownership) |
 
 **Gates (in `AppServiceProvider` oder `AuthServiceProvider`, benannt nach Capability):**
 
@@ -217,9 +217,13 @@ Gate::define('bookings.manage',         fn (User $u) => true);        // jede au
 - **`StudioPolicy`** — `update`/`manageRooms`/`manageCourses`: nur wenn
   `$user->studio_id === $studio->id` (Studio-Admin des eigenen Studios). Der Admin
   umgeht das via `Gate::before` oder Admin-Zweig in der Policy.
-- **`CoursePolicy`** — `createUpdate`/`update`: Trainer dann, wenn ein Eintrag in der
-  Pivot `course_user` für (`course_id`, `user_id`) existiert; Studio-Admin, wenn
-  `$user->studio_id === $course->studio_id`; Admin immer.
+- **`CoursePolicy`** — `createUpdate`/`update`: Trainer dann, wenn er Lead-Trainer
+  (`courses.trainer_id === $user->id`) oder Termin-Trainer einer Session des Kurses
+  (`course_sessions.trainer_id`) ist — die Pivot `course_user` ist deferred/optional
+  (slim architecture, 2026-10-15); Studio-Admin, wenn
+  `$user->studio_id === $course->studio_id`; Admin immer. Umsetzung seit Schritt 5a
+  zusätzlich über Scopes abgesichert: `Course::assignedTo($user)->findOrFail($id)`
+  liefert 404 für nicht zugewiesene Trainer.
 - **`BookingPolicy`** — `delete` (Austragen): Ownership, `$user->id === $booking->user_id`.
   (Austragen der eigenen Buchung ist kein Rollenprivileg, sondern Ownership-ChECK —
   zusätzlich gilt das 2-Stunden-Fenster, siehe Fachlogik.)

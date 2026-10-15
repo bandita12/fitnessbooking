@@ -84,6 +84,15 @@ Implementierung eines rollenbasierten Zugriffssystems (Admins, Studio-Admins, Ku
 - [ ] Policies: `StudioPolicy` (studio_id-Vergleich), `CoursePolicy` (Pivot-Trainer oder Studio-Admin), `BookingPolicy` (Ownership); Fremd-Studio → **404**, nie 403
 - [ ] Tenant-Scope serverseitig pro Request — nie aus Token-Claims
 
+#### Schritt 5a — Capability-Layer: Enum, Gates & Policies (2026-10-15)
+- [x] `App\Enums\UserRole` (`admin`, `studio_admin`, `trainer`, `customer`) + Cast auf `User::role`; `role`/`studio_id` ins Fillable aufgenommen (Seeder-Fix)
+- [x] `AuthServiceProvider`: alle 8 Capabilities als Gates + `Gate::before` Admin-Bypass; Policies gemappt (`Studio` → `StudioPolicy`, `Course` → `CoursePolicy`)
+- [x] `StudioPolicy` (`view`/`update`/`manageRooms`/`manageCourses`) und `CoursePolicy` (`update`/`createUpdate`); Trainer-Prüfung über `courses.trainer_id` (Lead) ODER `course_sessions.trainer_id` (Vertretung) — Pivot `course_user` bleibt optional/deferred
+- [x] 404-statt-403: `ScopedByStudio`-Trait (`forTenant`) + `Course::assignedTo()` — Controller lösen per `findOrFail()` auf, Cross-Tenant → `ModelNotFoundException` (404)
+- [x] Minimale Modelle als Policy-Voraussetzung angelegt: `Studio`, `Course`, `CourseSession` (volle Schritt-3-Modellierung folgt separat)
+- [x] Regressionstest `tests/Feature/RbacAuthorizationTest.php` (6 Tests: Enum-Cast, Capability-Matrix, Studio-/Course-Policy, 404-Scopes, Seeder-Idempotenz) — SQLite `:memory:` + Cross-Engine-Lauf auf Wegwerf-PostgreSQL
+- [ ] Offen: `BookingPolicy` (Ownership) + Route-`can:`-Verdrahtung folgen mit Schritt 6 (API-Routen)
+
 #### Schritt 6 — API-Routen (Tabelle im Plan)
 - [ ] Admin: `/api/admin/studios`, `/api/admin/users`
 - [ ] Studio-Admin: `/api/studios/{id}/details|rooms|courses`

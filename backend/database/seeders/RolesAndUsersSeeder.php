@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Enums\UserRole;
+use App\Models\Studio;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
@@ -20,6 +21,15 @@ class RolesAndUsersSeeder extends Seeder
      */
     public function run(): void
     {
+        $studio = Studio::firstOrCreate(
+            ['name' => 'Demo Studio'],
+            [
+                'street' => 'Musterstr. 1',
+                'zip' => '12345',
+                'city' => 'Musterstadt',
+            ],
+        );
+
         // Admin — Super-Admin mit vollem Zugriff
         User::firstOrCreate(
             ['email' => 'admin@example.com'],
@@ -38,7 +48,7 @@ class RolesAndUsersSeeder extends Seeder
                 'name' => 'Studio Admin User',
                 'role' => UserRole::StudioAdmin->value,
                 'password' => env('STUDIO_ADMIN_PASSWORD', 'secret'),
-                'studio_id' => 1, // FK auf das erste Studio (wird von create_studios_table bereitgestellt)
+                'studio_id' => $studio->id,
             ],
         );
 
@@ -49,7 +59,7 @@ class RolesAndUsersSeeder extends Seeder
                 'name' => 'Trainer User',
                 'role' => UserRole::Trainer->value,
                 'password' => env('TRAINER_PASSWORD', 'secret'),
-                'studio_id' => 1,
+                'studio_id' => $studio->id,
             ],
         );
 
