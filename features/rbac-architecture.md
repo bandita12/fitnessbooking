@@ -53,6 +53,12 @@ Zusätzliche Felder am User: `users.role` (String, Default `customer`) und
    `studio_id` foreignId nullable → `studios`, constrained, nullOnDelete, Index auf `studio_id`.
    (Benötigt Tab existiert ab Schritt 1.)
 3. **`create_rooms_table`** — Räume gehören zu einem Studio.
+   - **`add_marketing_fields_to_studios_table`** (Korrektur-Migration, **FK-frei**) —
+     chronologisch direkt **nach** `create_rooms_table` generiert, benötigt aber nur
+     die ab Schritt 1 existierende `studios`-Tabelle. Erweitert `studios` per
+     `Schema::table` um vier Marketing-/Bild-Felder (`description`, `thumbnail_url`,
+     `image_url`, `web_link`, alle nullable) — kein Fremdschlüssel, keine
+     CHECK-Constraint, reiner Laravel-Schema-Builder.
 4. **`create_courses_table`** — Kurse gehören zu Studio + optional Raum.
 5. **`create_course_user_table`** (Pivot) — Kurs ↔ Trainer (n:1-Verhältnis pro Kurs, Mehrfachzuweisung möglich).
 6. **`create_bookings_table`** — Kundenbuchungen. **(Muss VOR `course_updates` entstehen — siehe Hinweis.)**
@@ -74,6 +80,14 @@ $table->string('street');
 $table->string('zip');
 $table->string('city');
 $table->timestamps();
+
+// 1b) add_marketing_fields_to_studios_table — Korrektur-Migration (Schema::table),
+// erweitert die bestehende studios-Tabelle; FK-frei, nur Marketing-/Bild-Felder
+// (alle nullable, reiner Schema-Builder, keine CHECK-Constraint):
+$table->text('description')->nullable();
+$table->string('thumbnail_url')->nullable();
+$table->string('image_url')->nullable();
+$table->string('web_link')->nullable();
 
 // 2) add_role_and_studio_id_to_users (Schema::table)
 $table->string('role', 32)->default('customer');
