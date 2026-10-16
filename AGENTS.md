@@ -29,6 +29,10 @@ Code and documentation: English. UI strings: German. German terms inside docs ar
 - UI flows → Playwright E2E; every test carries `{ tag: [...] }`: `@smoke` on the critical path, `@regression` before deploy, `@feature:<name>` for feature-specific selection.
 - Bug fixes need at least one regression test.
 - Refactorings may skip tests but must justify it in the commit.
+- Verify runs use SQLite in-memory only (`phpunit.xml` pins `DB_CONNECTION=sqlite`,
+  `DB_DATABASE=:memory:` — do not override). The local PostgreSQL dev database is
+  the user's manual playground: never migrate, seed, query, or drop it during
+  verification, and never request deletion of dev data.
 
 ## 5. Quality gates
 
