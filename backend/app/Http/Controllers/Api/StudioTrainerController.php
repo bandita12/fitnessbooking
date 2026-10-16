@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class StudioTrainerController extends Controller
 {
@@ -82,6 +83,35 @@ class StudioTrainerController extends Controller
         $model->trainers()->detach($trainer);
 
         return response()->json(null, 204);
+    }
+
+    /**
+     * Update a trainer linked to the studio (name/e-mail, password optional).
+     * Role and studio assignment cannot be changed via this route.
+     */
+    public function update(Request $request, int $studio, int $trainer): JsonResponse
+    {
+        $model = $this->resolveStudio($request, $studio);
+
+        $linked = $model->trainers()->whereKey($trainer)->firstOrFail();
+
+        if ($linked->role !== UserRole::Trainer) {
+            abort(404);
+        }
+
+        $data = $request->validate([
+            'name' => ['sometimes', 'string', 'max:255'],
+            'email' => ['sometimes', 'email', 'max:255', Rule::unique('users', 'email')->ignore($linked->id)],
+            'password' => ['sometimes', 'nullable', 'string', 'min:8'],
+        ]);
+
+        if (empty($data['password'] ?? null)) {
+            unset($data['password']);
+        }
+
+        $linked->update($data);
+
+        return response()->json($linked->only(['id', 'name', 'email']));
     }
 
     private function resolveStudio(Request $request, int $studio): Studio

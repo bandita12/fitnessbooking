@@ -48,3 +48,21 @@ export async function detachTrainer(
 ): Promise<void> {
   await client.delete(`/api/studios/${studioId}/trainers/${trainerId}`)
 }
+
+export interface TrainerUpdate {
+  name?: string
+  email?: string
+  password?: string
+}
+
+export async function updateTrainer(
+  studioId: number,
+  trainerId: number,
+  update: TrainerUpdate,
+): Promise<Trainer> {
+  const { data } = await client.put<Trainer>(
+    `/api/studios/${studioId}/trainers/${trainerId}`,
+    update,
+  )
+  return data
+}

@@ -28,6 +28,7 @@ import {
   detachTrainer,
   listTrainers,
   registerTrainer,
+  updateTrainer,
   type Trainer,
 } from '../api/trainers'
 import {
@@ -1684,6 +1685,25 @@ function TrainersSection({ studioId }: { studioId: number }) {
   const [regEmail, setRegEmail] = useState('')
   const [regPassword, setRegPassword] = useState('')
   const [attachEmail, setAttachEmail] = useState('')
+  const [editingTrainerId, setEditingTrainerId] = useState<number | null>(null)
+
+  function startTrainerEdit(trainer: Trainer) {
+    setNotice(null)
+    setError(null)
+    setEditingTrainerId(trainer.id)
+    setRegName(trainer.name)
+    setRegEmail(trainer.email)
+    setRegPassword('')
+  }
+
+  function cancelTrainerEdit() {
+    setEditingTrainerId(null)
+    setRegName('')
+    setRegEmail('')
+    setRegPassword('')
+    setNotice(null)
+    setError(null)
+  }
 
   useEffect(() => {
     let active = true
@@ -1708,21 +1728,34 @@ function TrainersSection({ studioId }: { studioId: number }) {
     setError(null)
     setSaving(true)
     try {
-      const created = await registerTrainer(studioId, {
-        name: regName,
-        email: regEmail,
-        password: regPassword,
-      })
-      setTrainers((previous) => [
-        ...previous,
-        { id: created.id, name: created.name, email: created.email },
-      ])
-      setRegName('')
-      setRegEmail('')
-      setRegPassword('')
-      setNotice(`Trainer „${created.name}“ wurde registriert und freigeschaltet.`)
+      if (editingTrainerId === null) {
+        const created = await registerTrainer(studioId, {
+          name: regName,
+          email: regEmail,
+          password: regPassword,
+        })
+        setTrainers((previous) => [
+          ...previous,
+          { id: created.id, name: created.name, email: created.email },
+        ])
+        setRegName('')
+        setRegEmail('')
+        setRegPassword('')
+        setNotice(`Trainer „${created.name}“ wurde registriert und freigeschaltet.`)
+      } else {
+        const updated = await updateTrainer(studioId, editingTrainerId, {
+          name: regName,
+          email: regEmail,
+          ...(regPassword !== '' ? { password: regPassword } : {}),
+        })
+        setTrainers((previous) =>
+          previous.map((entry) => (entry.id === updated.id ? updated : entry)),
+        )
+        cancelTrainerEdit()
+        setNotice(`Trainer „${updated.name}“ wurde gespeichert.`)
+      }
     } catch (unknownError: unknown) {
-      setError(errorMessage(unknownError, 'Trainer konnte nicht registriert werden.'))
+      setError(errorMessage(unknownError, 'Trainer konnte nicht gespeichert werden.'))
     } finally {
       setSaving(false)
     }
@@ -1755,6 +1788,9 @@ function TrainersSection({ studioId }: { studioId: number }) {
     try {
       await detachTrainer(studioId, trainer.id)
       setTrainers((previous) => previous.filter((entry) => entry.id !== trainer.id))
+      if (editingTrainerId === trainer.id) {
+        cancelTrainerEdit()
+      }
       setNotice(`Trainer „${trainer.name}“ wurde entfernt.`)
     } catch (unknownError: unknown) {
       setError(errorMessage(unknownError, 'Trainer konnte nicht entfernt werden.'))
@@ -1789,13 +1825,22 @@ function TrainersSection({ studioId }: { studioId: number }) {
                 <span className="font-medium text-gray-900">{trainer.name}</span>
                 <span className="block text-sm text-gray-600">{trainer.email}</span>
               </div>
-              <button
-                type="button"
-                onClick={() => void handleDetach(trainer)}
-                className="rounded-md border border-gray-300 px-2 py-1 text-sm text-red-600 hover:bg-gray-100"
-              >
-                Entfernen
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => startTrainerEdit(trainer)}
+                  className="rounded-md border border-gray-300 px-2 py-1 text-sm text-gray-700 hover:bg-gray-100"
+                >
+                  Bearbeiten
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleDetach(trainer)}
+                  className="rounded-md border border-gray-300 px-2 py-1 text-sm text-red-600 hover:bg-gray-100"
+                >
+                  Entfernen
+                </button>
+              </div>
             </li>
           ))}
         </ul>
@@ -1813,9 +1858,19 @@ function TrainersSection({ studioId }: { studioId: number }) {
 
       <div className="space-y-8">
         <section className="rounded-lg bg-white p-6 shadow-md">
-          <h2 className="mb-4 text-xl font-semibold text-gray-900">
-            Neuen Trainer registrieren
-          </h2>
+          <div className="mb-4 flex items-center justify-between gap-2">
+            <h2 className="text-xl font-semibold text-gray-900">
+              {editingTrainerId === null ? 'Neuen Trainer registrieren' : 'Trainer bearbeiten'}
+            </h2>
+            <button
+              type="button"
+              onClick={cancelTrainerEdit}
+              title="Bearbeitungsmodus beenden und leeres Formular öffnen"
+              className="rounded-md border border-indigo-600 px-3 py-1 text-sm font-medium text-indigo-600 hover:bg-indigo-50"
+            >
+              + Neuen Trainer anlegen
+            </button>
+          </div>
           <form onSubmit={handleRegister} className="space-y-3">
             <input
               aria-label="Name"
@@ -1836,22 +1891,41 @@ function TrainersSection({ studioId }: { studioId: number }) {
             />
             <input
               aria-label="Passwort"
-              placeholder="Passwort (min. 8 Zeichen) *"
+              placeholder={
+                editingTrainerId === null
+                  ? 'Passwort (min. 8 Zeichen) *'
+                  : 'Neues Passwort (leer lassen = unverändert)'
+              }
               type="password"
               autoComplete="new-password"
-              required
+              required={editingTrainerId === null}
               minLength={8}
               value={regPassword}
               onChange={(event) => setRegPassword(event.target.value)}
               className={inputClass}
             />
-            <button
-              type="submit"
-              disabled={saving}
-              className="w-full rounded-md bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-            >
-              {saving ? 'Wird registriert …' : 'Trainer registrieren'}
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                disabled={saving}
+                className="flex-1 rounded-md bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {saving
+                  ? 'Wird gespeichert …'
+                  : editingTrainerId === null
+                    ? 'Trainer registrieren'
+                    : 'Änderungen speichern'}
+              </button>
+              {editingTrainerId !== null && (
+                <button
+                  type="button"
+                  onClick={cancelTrainerEdit}
+                  className="rounded-md border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-100"
+                >
+                  Abbrechen
+                </button>
+              )}
+            </div>
           </form>
         </section>
 

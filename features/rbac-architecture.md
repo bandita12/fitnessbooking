@@ -405,6 +405,7 @@ Regeln:
 | `POST /api/studios/{studio}/trainers` | POST | `auth:sanctum` + `can:courses.manage` | `StudioPolicy` (manageCourses) |
 | `POST /api/studios/{studio}/trainers/attach` | POST | `auth:sanctum` + `can:courses.manage` | `StudioPolicy` (manageCourses) |
 | `DELETE /api/studios/{studio}/trainers/{trainer}` | DELETE | `auth:sanctum` + `can:courses.manage` | `StudioPolicy` (manageCourses) |
+| `PUT /api/studios/{studio}/trainers/{trainer}` | PUT | `auth:sanctum` + `can:courses.manage` | `StudioPolicy` (manageCourses, via Scope) — Name/E-Mail, E-Mail unique-ignore-self, Passwort nur bei Befüllung; Trainer muss mit Studio verknüpft sein → sonst 404; kein Rollen-/Studio-Wechsel |
 | `POST /api/studios/{studio}/courses` | POST | `auth:sanctum` + `can:courses.manage` | `StudioPolicy` (studio_id) |
 | `PUT /api/studios/{studio}/courses/{course}` | PUT | `auth:sanctum` + `can:courses.manage` | `StudioPolicy` (studio_id) — Titel, Beschreibung, Wochentag, Zeiten, Lead-Trainer, `room_id` (nullable, studiozugehörig → sonst 422) |
 | `DELETE /api/studios/{studio}/courses/{course}` | DELETE | `auth:sanctum` + `can:courses.manage` | `StudioPolicy` (studio_id) |
