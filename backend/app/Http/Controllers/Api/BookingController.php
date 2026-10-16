@@ -23,7 +23,7 @@ class BookingController extends Controller
 
         $session = CourseSession::findOrFail($data['course_session_id']);
 
-        if ($session->status !== 'scheduled') {
+        if ($session->status === 'cancelled') {
             return response()->json(['message' => 'Termin ist nicht buchbar.'], 422);
         }
 
