@@ -2,6 +2,7 @@
 
 Stand: 2026-10-14. Nur offene TODO-Positionen.
 
+- [ ] Follow-up Registrierung (Verify-Findings 2026-10-16): `throttle` für offene `/auth/register` (+ ggf. `/auth/login`) nachziehen (medium, Spam-Accounts); Login-422 zeigt seit Feld-Fehler-Mapping englische Rohmeldung statt deutscher Generalmeldung — Mapping auf Registrierungs-Modus begrenzen (low)
 - [ ] Follow-up Trainer-Listen-Fix (Verify-Findings 2026-10-16): `StudioTrainerController@update/@destroy` greifen nur für Pivot-verknüpfte Trainer — direkt zugeordnete (`users.studio_id`) sind sichtbar, aber nicht editier-/entfernbar (medium; entscheiden: auch dort berücksichtigen oder beim Anlegen immer Pivot schreiben). Klein: Fehler-States in `CoursesSection` bei Reload zurücksetzen; Positions-Assertion in `StudioTrainerListingTest:56` mengenbasiert machen
 - [ ] `features/` anlegen: erstes Feature als SOLL-Zustand dokumentieren (Architektur, Datenmodell, API-Verträge)
 - [ ] Nach dem ersten `git pull` im Skills-Repo: `AGENTS.skills.md` fortschreiben (skill `skills-marker`)

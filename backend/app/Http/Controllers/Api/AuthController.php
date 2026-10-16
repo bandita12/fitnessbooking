@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Enums\UserRole;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -26,6 +28,28 @@ class AuthController extends Controller
         $request->session()->regenerate();
 
         return response()->json($this->payload($request));
+    }
+
+    public function register(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ]);
+
+        $user = User::create([
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'password' => $data['password'],
+            'role' => UserRole::Customer,
+            'studio_id' => null,
+        ]);
+
+        Auth::login($user);
+        $request->session()->regenerate();
+
+        return response()->json($this->payload($request), 201);
     }
 
     public function logout(Request $request): JsonResponse

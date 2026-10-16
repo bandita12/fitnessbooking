@@ -5,7 +5,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { fetchMe, loginRequest, logoutRequest, type AuthUser } from '../api/auth'
+import { fetchMe, loginRequest, logoutRequest, registerRequest, type AuthUser } from '../api/auth'
 import { AuthContext } from './auth-context'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -40,9 +40,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }, [])
 
+  const register = useCallback(
+    async (name: string, email: string, password: string, passwordConfirmation: string) => {
+      const authenticated = await registerRequest({
+        name,
+        email,
+        password,
+        password_confirmation: passwordConfirmation,
+      })
+      setUser(authenticated)
+      return authenticated
+    },
+    [],
+  )
+
   const value = useMemo(
-    () => ({ user, loading, login, logout }),
-    [user, loading, login, logout],
+    () => ({ user, loading, login, logout, register }),
+    [user, loading, login, logout, register],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

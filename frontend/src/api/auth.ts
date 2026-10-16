@@ -27,6 +27,24 @@ export async function loginRequest(
   return data
 }
 
+export interface RegisterPayload {
+  name: string
+  email: string
+  password: string
+  password_confirmation: string
+}
+
+export async function registerRequest(
+  payload: RegisterPayload,
+): Promise<AuthUser> {
+  await getCsrfCookie()
+  const { data } = await client.post<AuthUser>(
+    '/api/auth/register',
+    payload,
+  )
+  return data
+}
+
 export async function logoutRequest(): Promise<void> {
   await client.post('/api/auth/logout')
 }
