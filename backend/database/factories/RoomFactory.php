@@ -27,7 +27,7 @@ class RoomFactory extends Factory
             'image_url' => null,
             'color_code' => null,
             'location_type' => 'indoor',
-            'lighting' => 'none',
+            'lighting' => null,
             'size_sqm' => null,
             'width_meters' => null,
             'length_meters' => null,

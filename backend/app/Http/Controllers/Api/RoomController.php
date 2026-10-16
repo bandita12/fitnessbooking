@@ -61,7 +61,7 @@ class RoomController extends Controller
     {
         $maybe = $sometimes ? 'sometimes' : 'required';
 
-        return $request->validate([
+        $validated = $request->validate([
             'name' => [$maybe, 'string', 'max:255'],
             'capacity' => [$maybe, 'integer', 'min:1'],
             'description' => ['sometimes', 'nullable', 'string'],
@@ -75,5 +75,11 @@ class RoomController extends Controller
             'length_meters' => ['sometimes', 'nullable', 'numeric', 'min:0'],
             'height_meters' => ['sometimes', 'nullable', 'numeric', 'min:0'],
         ]);
+
+        if (array_key_exists('lighting', $validated) && $validated['lighting'] === 'none') {
+            $validated['lighting'] = null;
+        }
+
+        return $validated;
     }
 }

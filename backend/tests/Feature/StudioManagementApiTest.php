@@ -77,6 +77,31 @@ class StudioManagementApiTest extends TestCase
         ])->assertUnprocessable()->assertJsonValidationErrors(['capacity', 'color_code', 'location_type']);
     }
 
+    public function test_room_lighting_none_is_stored_as_null(): void
+    {
+        $studio = $this->makeStudio();
+        Sanctum::actingAs($this->studioAdmin($studio));
+
+        $create = $this->postJson("/api/studios/{$studio->id}/rooms", [
+            'name' => 'Saal Dunkel',
+            'capacity' => 10,
+            'lighting' => 'none',
+        ])->assertCreated()->assertJsonPath('lighting', null);
+        $roomId = $create->json('id');
+
+        $this->assertDatabaseHas('rooms', ['id' => $roomId, 'lighting' => null]);
+
+        $this->putJson("/api/studios/{$studio->id}/rooms/{$roomId}", [
+            'lighting' => 'led',
+        ])->assertOk()->assertJsonPath('lighting', 'led');
+
+        $this->putJson("/api/studios/{$studio->id}/rooms/{$roomId}", [
+            'lighting' => 'none',
+        ])->assertOk()->assertJsonPath('lighting', null);
+
+        $this->assertDatabaseHas('rooms', ['id' => $roomId, 'lighting' => null]);
+    }
+
     public function test_foreign_studio_rooms_resolve_to_404(): void
     {
         $own = $this->makeStudio('Own');

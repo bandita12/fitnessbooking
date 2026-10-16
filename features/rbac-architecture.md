@@ -128,7 +128,7 @@ $table->string('thumbnail_url')->nullable();
 $table->string('image_url')->nullable();
 $table->string('color_code', 7)->nullable();
 $table->string('location_type', 16)->default('indoor');
-$table->string('lighting', 16)->default('none');
+$table->string('lighting', 16)->nullable()->default(null); // NULL = keine Angabe; Frontend-Sentinel 'none' wird beim Speichern zu NULL normalisiert
 $table->unsignedInteger('size_sqm')->nullable();
 $table->decimal('width_meters', 5, 2)->nullable();
 $table->decimal('length_meters', 5, 2)->nullable();
