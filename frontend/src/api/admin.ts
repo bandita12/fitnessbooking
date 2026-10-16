@@ -48,3 +48,7 @@ export async function updateUser(
   )
   return data
 }
+
+export async function deleteUser(userId: number): Promise<void> {
+  await client.delete(`/api/admin/users/${userId}`)
+}

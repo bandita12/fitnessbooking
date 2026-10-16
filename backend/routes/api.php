@@ -32,6 +32,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('/admin/users', [AdminUserController::class, 'index'])->can('users.assign-roles');
     Route::post('/admin/users', [AdminUserController::class, 'store'])->can('users.assign-roles');
     Route::put('/admin/users/{user}', [AdminUserController::class, 'update'])->can('users.assign-roles');
+    Route::delete('/admin/users/{user}', [AdminUserController::class, 'destroy'])->can('users.assign-roles');
     Route::put('/admin/studios/{studio}', [StudioController::class, 'update'])->can('studios.manage');
     Route::delete('/admin/studios/{studio}', [StudioController::class, 'destroy'])->can('studios.manage');
     Route::put('/studios/{studio}/details', [StudioController::class, 'update'])->can('studios.update');

@@ -32,3 +32,18 @@ export async function createStudio(studio: NewStudio): Promise<Studio> {
   const { data } = await client.post<Studio>('/api/admin/studios', studio)
   return data
 }
+
+export async function updateStudio(
+  studioId: number,
+  studio: Partial<NewStudio>,
+): Promise<Studio> {
+  const { data } = await client.put<Studio>(
+    `/api/admin/studios/${studioId}`,
+    studio,
+  )
+  return data
+}
+
+export async function deleteStudio(studioId: number): Promise<void> {
+  await client.delete(`/api/admin/studios/${studioId}`)
+}

@@ -84,4 +84,20 @@ class UserController extends Controller
 
         return response()->json($model->only(['id', 'name', 'email', 'role', 'studio_id']));
     }
+
+    /**
+     * Delete a user. A super-admin cannot delete their own account.
+     */
+    public function destroy(Request $request, int $user): JsonResponse
+    {
+        $model = User::findOrFail($user);
+
+        if ($model->id === $request->user()->id) {
+            return response()->json(['message' => 'Das eigene Konto kann nicht gelöscht werden.'], 422);
+        }
+
+        $model->delete();
+
+        return response()->json(null, 204);
+    }
 }

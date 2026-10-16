@@ -3,6 +3,10 @@
 namespace Tests\Feature;
 
 use App\Enums\UserRole;
+use App\Models\Booking;
+use App\Models\Course;
+use App\Models\CourseSession;
+use App\Models\Room;
 use App\Models\Studio;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -118,5 +122,67 @@ class AdminUserUpdateApiTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1)
             ->assertJsonPath('0.role', 'studio_admin');
+    }
+
+    public function test_admin_can_delete_user_but_not_themselves(): void
+    {
+        $user = User::factory()->create(['role' => UserRole::StudioAdmin->value]);
+
+        $this->deleteJson("/api/admin/users/{$user->id}")->assertNoContent();
+        $this->assertDatabaseMissing('users', ['id' => $user->id]);
+
+        $this->deleteJson("/api/admin/users/{$this->admin->id}")->assertUnprocessable();
+        $this->assertDatabaseHas('users', ['id' => $this->admin->id]);
+    }
+
+    public function test_deleting_studio_cascades_to_rooms_sessions_and_bookings(): void
+    {
+        $studio = Studio::factory()->create();
+        $room = Room::create([
+            'studio_id' => $studio->id,
+            'name' => 'Saal',
+            'capacity' => 10,
+        ]);
+        $course = Course::create([
+            'studio_id' => $studio->id,
+            'title' => 'Kurs',
+            'day_of_week' => 1,
+            'start_time' => '09:00:00',
+            'end_time' => '10:00:00',
+        ]);
+        $session = CourseSession::create([
+            'course_id' => $course->id,
+            'room_id' => $room->id,
+            'date' => now()->addDay()->format('Y-m-d'),
+        ]);
+        $customer = User::factory()->create(['role' => UserRole::Customer->value]);
+        Booking::create([
+            'user_id' => $customer->id,
+            'course_session_id' => $session->id,
+        ]);
+
+        $this->deleteJson("/api/admin/studios/{$studio->id}")->assertNoContent();
+
+        $this->assertDatabaseMissing('studios', ['id' => $studio->id]);
+        $this->assertDatabaseMissing('rooms', ['id' => $room->id]);
+        $this->assertDatabaseMissing('courses', ['id' => $course->id]);
+        $this->assertDatabaseMissing('course_sessions', ['id' => $session->id]);
+        $this->assertSame(0, Booking::count());
+    }
+
+    public function test_admin_can_update_studio_marketing_fields(): void
+    {
+        $studio = Studio::factory()->create();
+
+        $this->putJson("/api/admin/studios/{$studio->id}", [
+            'name' => 'Neu',
+            'description' => 'Beschreibung',
+            'web_link' => 'https://example.com',
+        ])->assertOk()->assertJsonPath('name', 'Neu');
+
+        $this->assertDatabaseHas('studios', [
+            'id' => $studio->id,
+            'description' => 'Beschreibung',
+        ]);
     }
 }

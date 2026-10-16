@@ -2,6 +2,7 @@ import axios from 'axios'
 import { useEffect, useState, type FormEvent } from 'react'
 import {
   createStudioAdmin,
+  deleteUser,
   listUsers,
   updateUser,
   type ManagedUser,
@@ -16,7 +17,9 @@ import {
 } from '../api/rooms'
 import {
   createStudio,
+  deleteStudio,
   listStudios,
+  updateStudio,
   type NewStudio,
   type Studio,
 } from '../api/studios'
@@ -83,6 +86,7 @@ export default function DashboardPage() {
   const [studioNotice, setStudioNotice] = useState<string | null>(null)
   const [studioError, setStudioError] = useState<string | null>(null)
   const [savingStudio, setSavingStudio] = useState(false)
+  const [editingStudioId, setEditingStudioId] = useState<number | null>(null)
 
   const [adminName, setAdminName] = useState('')
   const [adminEmail, setAdminEmail] = useState('')
@@ -118,27 +122,106 @@ export default function DashboardPage() {
     setStudioForm((previous) => ({ ...previous, [field]: value }))
   }
 
+  function studioPayload(): NewStudio {
+    return {
+      ...studioForm,
+      name: studioForm.name.trim(),
+      description: studioForm.description?.trim() === '' ? undefined : studioForm.description?.trim(),
+      thumbnail_url:
+        studioForm.thumbnail_url?.trim() === '' ? undefined : studioForm.thumbnail_url?.trim(),
+      image_url: studioForm.image_url?.trim() === '' ? undefined : studioForm.image_url?.trim(),
+      web_link: studioForm.web_link?.trim() === '' ? undefined : studioForm.web_link?.trim(),
+    }
+  }
+
+  function startStudioEdit(studio: Studio) {
+    setStudioNotice(null)
+    setStudioError(null)
+    setEditingStudioId(studio.id)
+    setStudioForm({
+      name: studio.name,
+      street: studio.street,
+      zip: studio.zip,
+      city: studio.city,
+      description: studio.description ?? '',
+      thumbnail_url: studio.thumbnail_url ?? '',
+      image_url: studio.image_url ?? '',
+      web_link: studio.web_link ?? '',
+    })
+  }
+
+  function cancelStudioEdit() {
+    setEditingStudioId(null)
+    setStudioForm(emptyStudio)
+  }
+
   async function handleStudioSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setStudioNotice(null)
     setStudioError(null)
     setSavingStudio(true)
     try {
-      const created = await createStudio({
-        ...studioForm,
-        description: studioForm.description?.trim() === '' ? undefined : studioForm.description,
-        thumbnail_url:
-          studioForm.thumbnail_url?.trim() === '' ? undefined : studioForm.thumbnail_url,
-        image_url: studioForm.image_url?.trim() === '' ? undefined : studioForm.image_url,
-        web_link: studioForm.web_link?.trim() === '' ? undefined : studioForm.web_link,
-      })
-      setStudios((previous) => [...previous, created])
-      setStudioForm(emptyStudio)
-      setStudioNotice(`Studio „${created.name}“ wurde angelegt.`)
+      if (editingStudioId === null) {
+        const created = await createStudio(studioPayload())
+        setStudios((previous) => [...previous, created])
+        setStudioForm(emptyStudio)
+        setStudioNotice(`Studio „${created.name}“ wurde angelegt.`)
+      } else {
+        const updated = await updateStudio(editingStudioId, studioPayload())
+        setStudios((previous) =>
+          previous.map((entry) => (entry.id === updated.id ? updated : entry)),
+        )
+        setStudioForm(emptyStudio)
+        setEditingStudioId(null)
+        setStudioNotice(`Studio „${updated.name}“ wurde gespeichert.`)
+      }
     } catch (unknownError: unknown) {
-      setStudioError(errorMessage(unknownError, 'Studio konnte nicht angelegt werden.'))
+      setStudioError(errorMessage(unknownError, 'Studio konnte nicht gespeichert werden.'))
     } finally {
       setSavingStudio(false)
+    }
+  }
+
+  async function handleStudioDelete(studio: Studio) {
+    if (
+      !window.confirm(
+        `Studio „${studio.name}“ wirklich löschen? Dabei werden kaskadierend alle Räume, Kurse, Termine und Buchungen entfernt.`,
+      )
+    ) {
+      return
+    }
+    setStudioNotice(null)
+    setStudioError(null)
+    try {
+      await deleteStudio(studio.id)
+      setStudios((previous) => previous.filter((entry) => entry.id !== studio.id))
+      if (editingStudioId === studio.id) {
+        setEditingStudioId(null)
+        setStudioForm(emptyStudio)
+      }
+      setStudioNotice(`Studio „${studio.name}“ wurde gelöscht.`)
+    } catch (unknownError: unknown) {
+      setStudioError(errorMessage(unknownError, 'Studio konnte nicht gelöscht werden.'))
+    }
+  }
+
+  async function handleAdminDelete(admin: ManagedUser) {
+    if (
+      !window.confirm(`Studio-Admin „${admin.name}“ (${admin.email}) wirklich löschen?`)
+    ) {
+      return
+    }
+    setAdminNotice(null)
+    setAdminError(null)
+    try {
+      await deleteUser(admin.id)
+      setAdmins((previous) => previous.filter((entry) => entry.id !== admin.id))
+      if (editingAdminId === admin.id) {
+        resetAdminForm()
+      }
+      setAdminNotice(`Studio-Admin „${admin.name}“ wurde gelöscht.`)
+    } catch (unknownError: unknown) {
+      setAdminError(errorMessage(unknownError, 'Studio-Admin konnte nicht gelöscht werden.'))
     }
   }
 
@@ -275,12 +358,30 @@ export default function DashboardPage() {
               {studios.map((studio) => (
                 <li
                   key={studio.id}
-                  className="rounded-md border border-gray-200 px-3 py-2"
+                  className="flex items-center justify-between gap-2 rounded-md border border-gray-200 px-3 py-2"
                 >
-                  <span className="font-medium text-gray-900">{studio.name}</span>
-                  <span className="block text-sm text-gray-600">
-                    {studio.zip} {studio.city}
-                  </span>
+                  <div>
+                    <span className="font-medium text-gray-900">{studio.name}</span>
+                    <span className="block text-sm text-gray-600">
+                      {studio.zip} {studio.city}
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => startStudioEdit(studio)}
+                      className="rounded-md border border-gray-300 px-2 py-1 text-sm text-gray-700 hover:bg-gray-100"
+                    >
+                      Bearbeiten
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleStudioDelete(studio)}
+                      className="rounded-md border border-gray-300 px-2 py-1 text-sm text-red-600 hover:bg-gray-100"
+                    >
+                      Löschen
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -288,7 +389,7 @@ export default function DashboardPage() {
 
           <section className="rounded-lg bg-white p-6 shadow-md">
             <h2 className="mb-4 text-xl font-semibold text-gray-900">
-              Neues Studio
+              {editingStudioId === null ? 'Neues Studio' : 'Studio bearbeiten'}
             </h2>
             <form onSubmit={handleStudioSubmit} className="space-y-3">
               <input
@@ -363,13 +464,28 @@ export default function DashboardPage() {
                   {studioError}
                 </p>
               )}
-              <button
-                type="submit"
-                disabled={savingStudio}
-                className="w-full rounded-md bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-              >
-                {savingStudio ? 'Wird angelegt …' : 'Studio anlegen'}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  disabled={savingStudio}
+                  className="flex-1 rounded-md bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {savingStudio
+                    ? 'Wird gespeichert …'
+                    : editingStudioId === null
+                      ? 'Studio anlegen'
+                      : 'Änderungen speichern'}
+                </button>
+                {editingStudioId !== null && (
+                  <button
+                    type="button"
+                    onClick={cancelStudioEdit}
+                    className="rounded-md border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-100"
+                  >
+                    Abbrechen
+                  </button>
+                )}
+              </div>
             </form>
           </section>
         </div>
@@ -397,13 +513,22 @@ export default function DashboardPage() {
                       {admin.email} · {studioName(admin.studio_id)}
                     </span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => startAdminEdit(admin)}
-                    className="rounded-md border border-gray-300 px-2 py-1 text-sm text-gray-700 hover:bg-gray-100"
-                  >
-                    Bearbeiten
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => startAdminEdit(admin)}
+                      className="rounded-md border border-gray-300 px-2 py-1 text-sm text-gray-700 hover:bg-gray-100"
+                    >
+                      Bearbeiten
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleAdminDelete(admin)}
+                      className="rounded-md border border-gray-300 px-2 py-1 text-sm text-red-600 hover:bg-gray-100"
+                    >
+                      Löschen
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>
