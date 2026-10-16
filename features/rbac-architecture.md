@@ -139,6 +139,7 @@ $table->timestamps();
 $table->id();
 $table->foreignId('studio_id')->constrained()->cascadeOnDelete();
 $table->foreignId('trainer_id')->nullable()->constrained('users')->nullOnDelete(); // Lead-Trainer (regulär)
+$table->foreignId('room_id')->nullable()->constrained('rooms')->nullOnDelete(); // Standard-Raum, nachgerüstet via add_room_id_to_courses_table (vererbt an Sessions)
 $table->string('title');
 $table->text('description')->nullable();
 $table->string('thumbnail_url')->nullable();
@@ -151,6 +152,13 @@ $table->unsignedInteger('capacity')->nullable();           // NULL = erbt rooms.
 $table->timestamps();
 $table->index('studio_id');
 $table->index('trainer_id');
+
+// 4c) add_room_id_to_courses_table (Schema::table, 2026-10-16) — ergänzt
+// `courses.room_id` (nullable FK → `rooms`, nullOnDelete, Index): Standard-Raum
+// der Vorlage. Der `SessionGenerator` übernimmt ihn beim Generieren in neue
+// `course_sessions.room_id`; manuell überschriebene Session-Räume bleiben
+// erhalten (Generate ist idempotent und fasst bestehende Termine nicht an).
+// Portabel PG/SQLite, `down()` leer.
 
 // 4b) create_course_sessions_table (konkrete Einheit an Tag X)
 $table->id();
@@ -398,7 +406,7 @@ Regeln:
 | `POST /api/studios/{studio}/trainers/attach` | POST | `auth:sanctum` + `can:courses.manage` | `StudioPolicy` (manageCourses) |
 | `DELETE /api/studios/{studio}/trainers/{trainer}` | DELETE | `auth:sanctum` + `can:courses.manage` | `StudioPolicy` (manageCourses) |
 | `POST /api/studios/{studio}/courses` | POST | `auth:sanctum` + `can:courses.manage` | `StudioPolicy` (studio_id) |
-| `PUT /api/studios/{studio}/courses/{course}` | PUT | `auth:sanctum` + `can:courses.manage` | `StudioPolicy` (studio_id) |
+| `PUT /api/studios/{studio}/courses/{course}` | PUT | `auth:sanctum` + `can:courses.manage` | `StudioPolicy` (studio_id) — Titel, Beschreibung, Wochentag, Zeiten, Lead-Trainer, `room_id` (nullable, studiozugehörig → sonst 422) |
 | `DELETE /api/studios/{studio}/courses/{course}` | DELETE | `auth:sanctum` + `can:courses.manage` | `StudioPolicy` (studio_id) |
 | `GET /api/studios/{studio}/courses/{course}/sessions` | GET | `auth:sanctum` + `can:courses.view` | `StudioPolicy` (studio_id) |
 | `POST /api/studios/{studio}/courses/{course}/sessions` | POST | `auth:sanctum` + `can:courses.manage` | `CoursePolicy` (update) |
@@ -431,13 +439,17 @@ Customer-Routen (`/api/bookings`, Kurs-Listen) sind nicht studioseitig gescoped.
   Trainer-Leitung bei Lead-, Vertretungs- oder Studio-Pivot-Zuweisung; Scopes
   (`forTenant`, `Course::assignedTo`) lösen über die Pivot auf und liefern weiter
   404 statt 403.
-- **Kapazitäts-Kaskade / Lead-Room offene Frage:** `courses` trägt bewusst **kein**
-  `room_id` (nach Nutzerabschluss). `courses.capacity` NULL soll auf „Raum-Capacity"
-  zurückfallen — ein Kurs hat aber keine zugewiesene Raum-Lesebasis. Offen ist, ob (a)
-  ein optionales `default_room_id` ergänzt oder (b) die Inheritance erst auf Model-
-  Ebene über die Standard-Session entfällt (`first non-null win: session → course → null`,
-  Room-Kapazität nur an Session verbindlich). Die Datenbank hat die NULL-Semantik; die
-  Regel wird im Model implementiert.
+- **Kapazitäts-Kaskade / Lead-Room GELÖST (2026-10-16, Option a):**
+  `courses.room_id` (nullable, `add_room_id_to_courses_table`) ist der Standard-Raum
+  der Vorlage: `PUT /api/studios/{studio}/courses/{course}` akzeptiert `room_id`
+  (nullable, muss zum selben Studio gehören → sonst 422). Der `SessionGenerator`
+  (`App\Services\SessionGenerator`, genutzt von
+  `CourseSessionController@generate`) übernimmt ihn in neu erzeugte
+  `course_sessions.room_id`; manuell überschriebene Session-Räume bleiben erhalten
+  (Generate ist idempotent und fasst bestehende Termine nicht an — dasselbe
+  Override-Pattern wie `trainer_id`/Vertretung). Kapazitäts-Lesebasis damit:
+  `session.capacity ?? course.capacity ?? room.capacity`, wobei der Kurs-Raum die
+  der Vorlage zugeordnete Lesebasis liefert.
 - **Rollen-Modell-Abweichung:** TODO-Akzeptanzkriterium 1 nennt „Tabelle `roles` ODER
   Role-Feld"; gewählt wurde das String-Enum-Feld (`App\Enums\UserRole`). Keine
   `roles`-Tabelle.

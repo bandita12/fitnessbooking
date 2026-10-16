@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Course;
 use App\Models\Studio;
+use App\Services\SessionGenerator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -63,7 +64,7 @@ class CourseSessionController extends Controller
      * Generate the concrete sessions for the coming weeks (default 4).
      * Skips dates that already have a session (idempotent).
      */
-    public function generate(Request $request, int $studio, int $course): JsonResponse
+    public function generate(Request $request, int $studio, int $course, SessionGenerator $generator): JsonResponse
     {
         $courseModel = $this->resolveCourse($request, $studio, $course);
         $this->authorize('update', $courseModel);
@@ -73,19 +74,7 @@ class CourseSessionController extends Controller
         ]);
         $weeks = $data['weeks'] ?? 4;
 
-        $created = 0;
-        $today = now()->startOfDay();
-        for ($offset = 0; $offset < $weeks * 7; $offset++) {
-            $date = $today->copy()->addDays($offset);
-            if ($date->dayOfWeekIso !== (int) $courseModel->day_of_week) {
-                continue;
-            }
-            if ($courseModel->sessions()->whereDate('date', $date)->exists()) {
-                continue;
-            }
-            $courseModel->sessions()->create(['date' => $date->format('Y-m-d')]);
-            $created++;
-        }
+        $created = $generator->generate($courseModel, $weeks);
 
         return response()->json([
             'created' => $created,

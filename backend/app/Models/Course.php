@@ -15,6 +15,7 @@ class Course extends Model
     protected $fillable = [
         'studio_id',
         'trainer_id',
+        'room_id',
         'title',
         'description',
         'thumbnail_url',
@@ -42,6 +43,11 @@ class Course extends Model
     public function leadTrainer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'trainer_id');
+    }
+
+    public function room(): BelongsTo
+    {
+        return $this->belongsTo(Room::class);
     }
 
     public function sessions(): HasMany

@@ -5,6 +5,7 @@ export interface Course {
   id: number
   studio_id: number
   trainer_id: number | null
+  room_id: number | null
   title: string
   description: string | null
   thumbnail_url: string | null
@@ -23,6 +24,7 @@ export interface NewCourse {
   start_time: string
   end_time: string
   trainer_id?: number | null
+  room_id?: number | null
   thumbnail_url?: string
   image_url?: string
   web_link?: string
@@ -59,6 +61,18 @@ export async function createCourse(
 ): Promise<Course> {
   const { data } = await client.post<Course>(
     `/api/studios/${studioId}/courses`,
+    course,
+  )
+  return data
+}
+
+export async function updateCourse(
+  studioId: number,
+  courseId: number,
+  course: NewCourse,
+): Promise<Course> {
+  const { data } = await client.put<Course>(
+    `/api/studios/${studioId}/courses/${courseId}`,
     course,
   )
   return data

@@ -7,6 +7,7 @@ use App\Models\Course;
 use App\Models\Studio;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class CourseController extends Controller
 {
@@ -22,18 +23,7 @@ class CourseController extends Controller
         $model = Studio::forTenant($request->user())->findOrFail($studio);
         $this->authorize('manageCourses', $model);
 
-        $course = $model->courses()->create($request->validate([
-            'trainer_id' => ['nullable', 'integer', 'exists:users,id'],
-            'title' => ['required', 'string', 'max:255'],
-            'description' => ['nullable', 'string'],
-            'thumbnail_url' => ['nullable', 'string', 'max:255'],
-            'image_url' => ['nullable', 'string', 'max:255'],
-            'web_link' => ['nullable', 'string', 'max:255'],
-            'day_of_week' => ['required', 'integer', 'min:1', 'max:7'],
-            'start_time' => ['required', 'date_format:H:i:s'],
-            'end_time' => ['required', 'date_format:H:i:s', 'after:start_time'],
-            'capacity' => ['nullable', 'integer', 'min:1'],
-        ]));
+        $course = $model->courses()->create($this->validated($request, $model));
 
         return response()->json($course, 201);
     }
@@ -43,17 +33,9 @@ class CourseController extends Controller
         $model = $this->resolve($request, $studio, $course);
         $this->authorize('update', $model);
 
-        $model->update($request->validate([
-            'trainer_id' => ['sometimes', 'nullable', 'integer', 'exists:users,id'],
-            'title' => ['sometimes', 'string', 'max:255'],
-            'description' => ['sometimes', 'nullable', 'string'],
-            'day_of_week' => ['sometimes', 'integer', 'min:1', 'max:7'],
-            'start_time' => ['sometimes', 'date_format:H:i:s'],
-            'end_time' => ['sometimes', 'date_format:H:i:s'],
-            'capacity' => ['sometimes', 'nullable', 'integer', 'min:1'],
-        ]));
+        $model->update($this->validated($request, $model->studio, true));
 
-        return response()->json($model);
+        return response()->json($model->refresh());
     }
 
     public function destroy(Request $request, int $studio, int $course): JsonResponse
@@ -70,5 +52,34 @@ class CourseController extends Controller
         $studioModel = Studio::forTenant($request->user())->findOrFail($studio);
 
         return $studioModel->courses()->findOrFail($course);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function validated(Request $request, Studio $studio, bool $sometimes = false): array
+    {
+        $maybe = $sometimes ? 'sometimes' : 'required';
+        // On partial updates `start_time` may be absent, so `after:start_time`
+        // only applies when both times are validated together.
+        $endTime = [$maybe, 'date_format:H:i:s'];
+        if (! $sometimes || $request->has('start_time')) {
+            $endTime[] = 'after:start_time';
+        }
+
+        return $request->validate([
+            'trainer_id' => [$maybe, 'nullable', 'integer', 'exists:users,id'],
+            // `room_id` stays optional on create AND update (nullable FK).
+            'room_id' => ['sometimes', 'nullable', 'integer', Rule::exists('rooms', 'id')->where('studio_id', $studio->id)],
+            'title' => [$maybe, 'string', 'max:255'],
+            'description' => [$maybe, 'nullable', 'string'],
+            'thumbnail_url' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'image_url' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'web_link' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'day_of_week' => [$maybe, 'integer', 'min:1', 'max:7'],
+            'start_time' => [$maybe, 'date_format:H:i:s'],
+            'end_time' => $endTime,
+            'capacity' => [$maybe, 'nullable', 'integer', 'min:1'],
+        ]);
     }
 }
