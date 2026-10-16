@@ -153,6 +153,8 @@ export default function DashboardPage() {
   function cancelStudioEdit() {
     setEditingStudioId(null)
     setStudioForm(emptyStudio)
+    setStudioNotice(null)
+    setStudioError(null)
   }
 
   async function handleStudioSubmit(event: FormEvent<HTMLFormElement>) {
@@ -231,6 +233,8 @@ export default function DashboardPage() {
     setAdminPassword('')
     setAdminStudioId('')
     setEditingAdminId(null)
+    setAdminNotice(null)
+    setAdminError(null)
   }
 
   function startAdminEdit(admin: ManagedUser) {
@@ -388,9 +392,19 @@ export default function DashboardPage() {
           </section>
 
           <section className="rounded-lg bg-white p-6 shadow-md">
-            <h2 className="mb-4 text-xl font-semibold text-gray-900">
-              {editingStudioId === null ? 'Neues Studio' : 'Studio bearbeiten'}
-            </h2>
+            <div className="mb-4 flex items-center justify-between gap-2">
+              <h2 className="text-xl font-semibold text-gray-900">
+                {editingStudioId === null ? 'Neues Studio' : 'Studio bearbeiten'}
+              </h2>
+              <button
+                type="button"
+                onClick={cancelStudioEdit}
+                title="Bearbeitungsmodus beenden und leeres Formular öffnen"
+                className="rounded-md border border-indigo-600 px-3 py-1 text-sm font-medium text-indigo-600 hover:bg-indigo-50"
+              >
+                + Neues Studio
+              </button>
+            </div>
             <form onSubmit={handleStudioSubmit} className="space-y-3">
               <input
                 aria-label="Name"
@@ -535,11 +549,21 @@ export default function DashboardPage() {
           </section>
 
           <section className="rounded-lg bg-white p-6 shadow-md">
-            <h2 className="mb-4 text-xl font-semibold text-gray-900">
-              {editingAdminId === null
-                ? 'Studio-Admin zuweisen'
-                : 'Studio-Admin bearbeiten'}
-            </h2>
+            <div className="mb-4 flex items-center justify-between gap-2">
+              <h2 className="text-xl font-semibold text-gray-900">
+                {editingAdminId === null
+                  ? 'Studio-Admin zuweisen'
+                  : 'Studio-Admin bearbeiten'}
+              </h2>
+              <button
+                type="button"
+                onClick={resetAdminForm}
+                title="Bearbeitungsmodus beenden und leeres Formular öffnen"
+                className="rounded-md border border-indigo-600 px-3 py-1 text-sm font-medium text-indigo-600 hover:bg-indigo-50"
+              >
+                + Neuen Admin anlegen
+              </button>
+            </div>
             <form onSubmit={handleAdminSubmit} className="space-y-3">
               <input
                 aria-label="Name"
