@@ -14,6 +14,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // 1. Aktiviert das Auslesen von Session-Cookies für die API (wichtig für React SPA)
+        $middleware->statefulApi();
+
+        // 2. Behält deine bestehende CSRF-Ausnahme für die API bei
         $middleware->validateCsrfTokens(except: ['api/*']);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

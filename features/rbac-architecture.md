@@ -380,6 +380,7 @@ Regeln:
 | `GET /api/me` | GET | `web` + `auth:sanctum` | — |
 | `GET /api/studios` | GET | `auth:sanctum` + `can:courses.view` | — |
 | `GET /api/studios/{id}/courses` | GET | `auth:sanctum` + `can:courses.view` | — |
+| `GET /api/admin/studios` | GET | `auth:sanctum` + `can:studios.manage` | — |
 | `POST /api/admin/studios` | POST | `auth:sanctum` + `can:studios.manage` | — |
 | `PUT /api/admin/studios/{studio}` | PUT | `auth:sanctum` + `can:studios.manage` | — |
 | `DELETE /api/admin/studios/{studio}` | DELETE | `auth:sanctum` + `can:studios.manage` | — |
@@ -389,6 +390,11 @@ Regeln:
 | `POST /api/studios/{studio}/rooms` | POST | `auth:sanctum` + `can:rooms.manage` | `StudioPolicy` (studio_id) |
 | `PUT /api/studios/{studio}/rooms/{room}` | PUT | `auth:sanctum` + `can:rooms.manage` | `StudioPolicy` (studio_id) |
 | `DELETE /api/studios/{studio}/rooms/{room}` | DELETE | `auth:sanctum` + `can:rooms.manage` | `StudioPolicy` (studio_id) |
+| `GET /api/studios/{studio}/rooms` | GET | `auth:sanctum` + `can:courses.view` | `StudioPolicy` (studio_id, via Scope) |
+| `GET /api/studios/{studio}/trainers` | GET | `auth:sanctum` + `can:courses.view` | `StudioPolicy` (studio_id, via Scope) |
+| `POST /api/studios/{studio}/trainers` | POST | `auth:sanctum` + `can:courses.manage` | `StudioPolicy` (manageCourses) |
+| `POST /api/studios/{studio}/trainers/attach` | POST | `auth:sanctum` + `can:courses.manage` | `StudioPolicy` (manageCourses) |
+| `DELETE /api/studios/{studio}/trainers/{trainer}` | DELETE | `auth:sanctum` + `can:courses.manage` | `StudioPolicy` (manageCourses) |
 | `POST /api/studios/{studio}/courses` | POST | `auth:sanctum` + `can:courses.manage` | `StudioPolicy` (studio_id) |
 | `PUT /api/studios/{studio}/courses/{course}` | PUT | `auth:sanctum` + `can:courses.manage` | `StudioPolicy` (studio_id) |
 | `DELETE /api/studios/{studio}/courses/{course}` | DELETE | `auth:sanctum` + `can:courses.manage` | `StudioPolicy` (studio_id) |

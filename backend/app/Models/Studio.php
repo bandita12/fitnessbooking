@@ -27,6 +27,11 @@ class Studio extends Model
         return $this->hasMany(Course::class);
     }
 
+    public function rooms(): HasMany
+    {
+        return $this->hasMany(Room::class);
+    }
+
     /**
      * Trainers working for this studio (n:m via `studio_user`).
      */

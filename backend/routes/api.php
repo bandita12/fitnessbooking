@@ -6,7 +6,9 @@ use App\Http\Controllers\Api\BookingController;
 use App\Http\Controllers\Api\CourseController;
 use App\Http\Controllers\Api\CourseSessionController;
 use App\Http\Controllers\Api\FitnessTestController;
+use App\Http\Controllers\Api\RoomController;
 use App\Http\Controllers\Api\StudioController;
+use App\Http\Controllers\Api\StudioTrainerController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -30,6 +32,16 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::put('/admin/studios/{studio}', [StudioController::class, 'update'])->can('studios.manage');
     Route::delete('/admin/studios/{studio}', [StudioController::class, 'destroy'])->can('studios.manage');
     Route::put('/studios/{studio}/details', [StudioController::class, 'update'])->can('studios.update');
+
+    Route::get('/studios/{studio}/rooms', [RoomController::class, 'index'])->can('courses.view');
+    Route::post('/studios/{studio}/rooms', [RoomController::class, 'store'])->can('rooms.manage');
+    Route::put('/studios/{studio}/rooms/{room}', [RoomController::class, 'update'])->can('rooms.manage');
+    Route::delete('/studios/{studio}/rooms/{room}', [RoomController::class, 'destroy'])->can('rooms.manage');
+
+    Route::get('/studios/{studio}/trainers', [StudioTrainerController::class, 'index'])->can('courses.view');
+    Route::post('/studios/{studio}/trainers', [StudioTrainerController::class, 'store'])->can('courses.manage');
+    Route::post('/studios/{studio}/trainers/attach', [StudioTrainerController::class, 'attach'])->can('courses.manage');
+    Route::delete('/studios/{studio}/trainers/{trainer}', [StudioTrainerController::class, 'destroy'])->can('courses.manage');
 
     Route::get('/studios/{studio}/courses', [CourseController::class, 'index'])->can('courses.view');
     Route::post('/studios/{studio}/courses', [CourseController::class, 'store'])->can('courses.manage');
