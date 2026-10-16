@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import Login from './components/Login'
 import ProtectedRoute from './components/ProtectedRoute'
 import { AuthProvider } from './context/AuthContext'
@@ -5,8 +6,11 @@ import { useAuth } from './context/useAuth'
 import CoursesPage from './pages/CoursesPage'
 import DashboardPage from './pages/DashboardPage'
 
+type MainView = 'dashboard' | 'courses'
+
 function Shell() {
   const { user, loading, logout } = useAuth()
+  const [view, setView] = useState<MainView>('dashboard')
 
   if (loading) {
     return <p className="p-8 text-center text-gray-600">Wird geladen …</p>
@@ -17,11 +21,32 @@ function Shell() {
   }
 
   const isStaff = user.role === 'admin' || user.role === 'studio_admin'
+  const showCourses = !isStaff || (user.role === 'admin' && view === 'courses')
 
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="flex items-center justify-between bg-white px-8 py-4 shadow-sm">
-        <span className="font-semibold text-gray-900">Fitnessbooking</span>
+        <div className="flex items-center gap-4">
+          <span className="font-semibold text-gray-900">Fitnessbooking</span>
+          {user.role === 'admin' && (
+            <nav className="flex gap-2" aria-label="Hauptmenü">
+              <button
+                type="button"
+                onClick={() => setView('dashboard')}
+                className={`rounded-md px-3 py-1 text-sm font-medium ${view === 'dashboard' ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+              >
+                Dashboard
+              </button>
+              <button
+                type="button"
+                onClick={() => setView('courses')}
+                className={`rounded-md px-3 py-1 text-sm font-medium ${view === 'courses' ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+              >
+                Kursübersicht
+              </button>
+            </nav>
+          )}
+        </div>
         <div className="flex items-center gap-4">
           <span className="text-sm text-gray-600">
             {user.name} ({user.role})
@@ -35,13 +60,13 @@ function Shell() {
           </button>
         </div>
       </header>
-      {isStaff ? (
-        <ProtectedRoute allowedRoles={['admin', 'studio_admin']}>
-          <DashboardPage />
+      {showCourses ? (
+        <ProtectedRoute allowedRoles={['admin', 'studio_admin', 'trainer', 'customer']}>
+          <CoursesPage />
         </ProtectedRoute>
       ) : (
-        <ProtectedRoute allowedRoles={['trainer', 'customer']}>
-          <CoursesPage />
+        <ProtectedRoute allowedRoles={['admin', 'studio_admin']}>
+          <DashboardPage />
         </ProtectedRoute>
       )}
     </div>

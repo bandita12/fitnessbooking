@@ -46,7 +46,7 @@ import {
 } from '../api/sessions'
 import { useAuth } from '../context/useAuth'
 
-type Tab = 'studios' | 'admins'
+type Tab = 'studios' | 'admins' | 'rooms' | 'courses'
 
 const emptyStudio: NewStudio = {
   name: '',
@@ -97,6 +97,7 @@ export default function DashboardPage() {
   const [savingAdmin, setSavingAdmin] = useState(false)
   const [admins, setAdmins] = useState<ManagedUser[]>([])
   const [editingAdminId, setEditingAdminId] = useState<number | null>(null)
+  const [managedStudioId, setManagedStudioId] = useState<number | null>(null)
 
   useEffect(() => {
     let active = true
@@ -105,6 +106,11 @@ export default function DashboardPage() {
         if (active) {
           setStudios(studioData)
           setAdmins(adminData)
+          if (studioData.length > 0) {
+            setManagedStudioId((previous) =>
+              previous === null ? studioData[0].id : previous,
+            )
+          }
         }
       })
       .catch(() => {
@@ -166,6 +172,7 @@ export default function DashboardPage() {
       if (editingStudioId === null) {
         const created = await createStudio(studioPayload())
         setStudios((previous) => [...previous, created])
+        setManagedStudioId((previous) => (previous === null ? created.id : previous))
         setStudioForm(emptyStudio)
         setStudioNotice(`Studio „${created.name}“ wurde angelegt.`)
       } else {
@@ -341,7 +348,62 @@ export default function DashboardPage() {
         >
           Studio-Admins
         </button>
+        <button
+          type="button"
+          onClick={() => setTab('rooms')}
+          className={`rounded-md px-4 py-2 font-medium ${tab === 'rooms' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 border border-gray-300'}`}
+        >
+          Räume verwalten
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('courses')}
+          className={`rounded-md px-4 py-2 font-medium ${tab === 'courses' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 border border-gray-300'}`}
+        >
+          Kurse planen
+        </button>
       </div>
+
+      {(tab === 'rooms' || tab === 'courses') && (
+        <div className="mb-6 flex items-center gap-3 rounded-lg bg-white p-4 shadow-md">
+          <label htmlFor="managed-studio" className="text-sm font-medium text-gray-700">
+            Studio verwalten:
+          </label>
+          <select
+            id="managed-studio"
+            value={managedStudioId === null ? '' : managedStudioId}
+            onChange={(event) =>
+              setManagedStudioId(
+                event.target.value === '' ? null : Number(event.target.value),
+              )
+            }
+            className="rounded-md border border-gray-300 px-3 py-2 text-gray-900 focus:border-indigo-500 focus:outline-none"
+          >
+            <option value="">Studio wählen …</option>
+            {studios.map((studio) => (
+              <option key={studio.id} value={studio.id}>
+                {studio.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      {tab === 'rooms' &&
+        (managedStudioId === null ? (
+          <p className="rounded-lg bg-white p-6 text-gray-600 shadow-md">
+            Bitte oben ein Studio auswählen, um dessen Räume zu verwalten.
+          </p>
+        ) : (
+          <RoomsSection key={`rooms-${managedStudioId}`} studioId={managedStudioId} />
+        ))}
+      {tab === 'courses' &&
+        (managedStudioId === null ? (
+          <p className="rounded-lg bg-white p-6 text-gray-600 shadow-md">
+            Bitte oben ein Studio auswählen, um dessen Kurse zu planen.
+          </p>
+        ) : (
+          <CoursesSection key={`courses-${managedStudioId}`} studioId={managedStudioId} />
+        ))}
 
       {tab === 'studios' && (
         <div className="grid gap-8 md:grid-cols-2">
