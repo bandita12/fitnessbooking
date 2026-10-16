@@ -1,6 +1,11 @@
 import axios from 'axios'
 import { useEffect, useState, type FormEvent } from 'react'
-import { createStudioAdmin } from '../api/admin'
+import {
+  createStudioAdmin,
+  listUsers,
+  updateUser,
+  type ManagedUser,
+} from '../api/admin'
 import {
   createRoom,
   deleteRoom,
@@ -86,15 +91,20 @@ export default function DashboardPage() {
   const [adminNotice, setAdminNotice] = useState<string | null>(null)
   const [adminError, setAdminError] = useState<string | null>(null)
   const [savingAdmin, setSavingAdmin] = useState(false)
+  const [admins, setAdmins] = useState<ManagedUser[]>([])
+  const [editingAdminId, setEditingAdminId] = useState<number | null>(null)
 
   useEffect(() => {
     let active = true
-    listStudios()
-      .then((data) => {
-        if (active) setStudios(data)
+    Promise.all([listStudios(), listUsers('studio_admin')])
+      .then(([studioData, adminData]) => {
+        if (active) {
+          setStudios(studioData)
+          setAdmins(adminData)
+        }
       })
       .catch(() => {
-        if (active) setLoadError('Studios konnten nicht geladen werden.')
+        if (active) setLoadError('Daten konnten nicht geladen werden.')
       })
       .finally(() => {
         if (active) setLoading(false)
@@ -132,25 +142,71 @@ export default function DashboardPage() {
     }
   }
 
+  function resetAdminForm() {
+    setAdminName('')
+    setAdminEmail('')
+    setAdminPassword('')
+    setAdminStudioId('')
+    setEditingAdminId(null)
+  }
+
+  function startAdminEdit(admin: ManagedUser) {
+    setAdminNotice(null)
+    setAdminError(null)
+    setEditingAdminId(admin.id)
+    setAdminName(admin.name)
+    setAdminEmail(admin.email)
+    setAdminPassword('')
+    setAdminStudioId(admin.studio_id === null ? '' : String(admin.studio_id))
+  }
+
+  function studioName(studioId: number | null): string {
+    if (studioId === null) return '–'
+    return studios.find((studio) => studio.id === studioId)?.name ?? `ID ${studioId}`
+  }
+
   async function handleAdminSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setAdminNotice(null)
     setAdminError(null)
     setSavingAdmin(true)
     try {
-      const created = await createStudioAdmin({
-        name: adminName,
-        email: adminEmail,
-        password: adminPassword,
-        studio_id: Number(adminStudioId),
-      })
-      setAdminName('')
-      setAdminEmail('')
-      setAdminPassword('')
-      setAdminStudioId('')
-      setAdminNotice(`Studio-Admin „${created.name}“ wurde angelegt.`)
+      if (editingAdminId === null) {
+        const created = await createStudioAdmin({
+          name: adminName,
+          email: adminEmail,
+          password: adminPassword,
+          studio_id: Number(adminStudioId),
+        })
+        setAdmins((previous) => [
+          ...previous,
+          {
+            id: created.id,
+            name: created.name,
+            email: created.email,
+            role: created.role,
+            studio_id: created.studio_id,
+          },
+        ])
+        resetAdminForm()
+        setAdminNotice(`Studio-Admin „${created.name}“ wurde angelegt.`)
+      } else {
+        const updated = await updateUser(editingAdminId, {
+          name: adminName,
+          email: adminEmail,
+          studio_id: adminStudioId === '' ? null : Number(adminStudioId),
+          ...(adminPassword !== '' ? { password: adminPassword } : {}),
+        })
+        setAdmins((previous) =>
+          previous.map((entry) => (entry.id === updated.id ? updated : entry)),
+        )
+        resetAdminForm()
+        setAdminNotice(`Studio-Admin „${updated.name}“ wurde gespeichert.`)
+      }
     } catch (unknownError: unknown) {
-      setAdminError(errorMessage(unknownError, 'Studio-Admin konnte nicht angelegt werden.'))
+      setAdminError(
+        errorMessage(unknownError, 'Studio-Admin konnte nicht gespeichert werden.'),
+      )
     } finally {
       setSavingAdmin(false)
     }
@@ -320,72 +376,129 @@ export default function DashboardPage() {
       )}
 
       {tab === 'admins' && (
-        <section className="max-w-xl rounded-lg bg-white p-6 shadow-md">
-          <h2 className="mb-4 text-xl font-semibold text-gray-900">
-            Studio-Admin zuweisen
-          </h2>
-          <form onSubmit={handleAdminSubmit} className="space-y-3">
-            <input
-              aria-label="Name"
-              placeholder="Name *"
-              required
-              value={adminName}
-              onChange={(event) => setAdminName(event.target.value)}
-              className={inputClass}
-            />
-            <input
-              aria-label="E-Mail"
-              placeholder="E-Mail *"
-              type="email"
-              required
-              value={adminEmail}
-              onChange={(event) => setAdminEmail(event.target.value)}
-              className={inputClass}
-            />
-            <input
-              aria-label="Passwort"
-              placeholder="Passwort (min. 8 Zeichen) *"
-              type="password"
-              autoComplete="new-password"
-              required
-              minLength={8}
-              value={adminPassword}
-              onChange={(event) => setAdminPassword(event.target.value)}
-              className={inputClass}
-            />
-            <select
-              aria-label="Studio"
-              required
-              value={adminStudioId}
-              onChange={(event) => setAdminStudioId(event.target.value)}
-              className={inputClass}
-            >
-              <option value="">Studio wählen *</option>
-              {studios.map((studio) => (
-                <option key={studio.id} value={studio.id}>
-                  {studio.name}
-                </option>
+        <div className="grid gap-8 md:grid-cols-2">
+          <section className="rounded-lg bg-white p-6 shadow-md">
+            <h2 className="mb-4 text-xl font-semibold text-gray-900">
+              Studio-Admins
+            </h2>
+            {loading && <p className="text-gray-600">Wird geladen …</p>}
+            {!loading && admins.length === 0 && (
+              <p className="text-gray-600">Noch keine Studio-Admins vorhanden.</p>
+            )}
+            <ul className="space-y-2">
+              {admins.map((admin) => (
+                <li
+                  key={admin.id}
+                  className="flex items-center justify-between gap-2 rounded-md border border-gray-200 px-3 py-2"
+                >
+                  <div>
+                    <span className="font-medium text-gray-900">{admin.name}</span>
+                    <span className="block text-sm text-gray-600">
+                      {admin.email} · {studioName(admin.studio_id)}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => startAdminEdit(admin)}
+                    className="rounded-md border border-gray-300 px-2 py-1 text-sm text-gray-700 hover:bg-gray-100"
+                  >
+                    Bearbeiten
+                  </button>
+                </li>
               ))}
-            </select>
-            {adminNotice !== null && (
-              <p role="status" className="text-sm text-green-700">
-                {adminNotice}
-              </p>
-            )}
-            {adminError !== null && (
-              <p role="alert" className="text-sm text-red-600">
-                {adminError}
-              </p>
-            )}
-            <button
-              type="submit"
-              disabled={savingAdmin}
-              className="w-full rounded-md bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-            >
-              {savingAdmin ? 'Wird angelegt …' : 'Studio-Admin anlegen'}
-            </button>
-          </form>
-        </section>
+            </ul>
+          </section>
+
+          <section className="rounded-lg bg-white p-6 shadow-md">
+            <h2 className="mb-4 text-xl font-semibold text-gray-900">
+              {editingAdminId === null
+                ? 'Studio-Admin zuweisen'
+                : 'Studio-Admin bearbeiten'}
+            </h2>
+            <form onSubmit={handleAdminSubmit} className="space-y-3">
+              <input
+                aria-label="Name"
+                placeholder="Name *"
+                required
+                value={adminName}
+                onChange={(event) => setAdminName(event.target.value)}
+                className={inputClass}
+              />
+              <input
+                aria-label="E-Mail"
+                placeholder="E-Mail *"
+                type="email"
+                required
+                value={adminEmail}
+                onChange={(event) => setAdminEmail(event.target.value)}
+                className={inputClass}
+              />
+              <input
+                aria-label="Passwort"
+                placeholder={
+                  editingAdminId === null
+                    ? 'Passwort (min. 8 Zeichen) *'
+                    : 'Neues Passwort (leer lassen = unverändert)'
+                }
+                type="password"
+                autoComplete="new-password"
+                required={editingAdminId === null}
+                minLength={8}
+                value={adminPassword}
+                onChange={(event) => setAdminPassword(event.target.value)}
+                className={inputClass}
+              />
+              <select
+                aria-label="Studio"
+                required={editingAdminId === null}
+                value={adminStudioId}
+                onChange={(event) => setAdminStudioId(event.target.value)}
+                className={inputClass}
+              >
+                <option value="">
+                  {editingAdminId === null ? 'Studio wählen *' : 'Kein Studio'}
+                </option>
+                {studios.map((studio) => (
+                  <option key={studio.id} value={studio.id}>
+                    {studio.name}
+                  </option>
+                ))}
+              </select>
+              {adminNotice !== null && (
+                <p role="status" className="text-sm text-green-700">
+                  {adminNotice}
+                </p>
+              )}
+              {adminError !== null && (
+                <p role="alert" className="text-sm text-red-600">
+                  {adminError}
+                </p>
+              )}
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  disabled={savingAdmin}
+                  className="flex-1 rounded-md bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {savingAdmin
+                    ? 'Wird gespeichert …'
+                    : editingAdminId === null
+                      ? 'Studio-Admin anlegen'
+                      : 'Änderungen speichern'}
+                </button>
+                {editingAdminId !== null && (
+                  <button
+                    type="button"
+                    onClick={resetAdminForm}
+                    className="rounded-md border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-100"
+                  >
+                    Abbrechen
+                  </button>
+                )}
+              </div>
+            </form>
+          </section>
+        </div>
       )}
     </main>
   )

@@ -385,7 +385,8 @@ Regeln:
 | `PUT /api/admin/studios/{studio}` | PUT | `auth:sanctum` + `can:studios.manage` | — |
 | `DELETE /api/admin/studios/{studio}` | DELETE | `auth:sanctum` + `can:studios.manage` | — |
 | `POST /api/admin/users` | POST | `auth:sanctum` + `can:users.assign-roles` | — |
-| `PUT /api/admin/users/{user}` | PUT | `auth:sanctum` + `can:users.assign-roles` | — |
+| `GET /api/admin/users` | GET | `auth:sanctum` + `can:users.assign-roles` | — (optionaler `role`-Filter) |
+| `PUT /api/admin/users/{user}` | PUT | `auth:sanctum` + `can:users.assign-roles` | — (E-Mail unique-ignore-self, Enum-Rolle, Passwort nur bei Befüllung, Selbst-Demotion → 422) |
 | `PUT /api/studios/{studio}/details` | PUT | `auth:sanctum` + `can:studios.update` | `StudioPolicy` (studio_id) |
 | `POST /api/studios/{studio}/rooms` | POST | `auth:sanctum` + `can:rooms.manage` | `StudioPolicy` (studio_id) |
 | `PUT /api/studios/{studio}/rooms/{room}` | PUT | `auth:sanctum` + `can:rooms.manage` | `StudioPolicy` (studio_id) |
