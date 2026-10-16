@@ -47,8 +47,16 @@ function shortDate(isoDate: string): string {
 function availabilityText(session: CatalogSession): string {
   if (session.free_spots === null) return 'Anmeldung möglich'
   if (session.free_spots === 0) return 'Ausgebucht'
-  if (session.free_spots === 1) return 'Noch 1 Platz frei'
+  if (session.free_spots === 1) return 'Nur noch 1 Platz frei!'
+  if (session.free_spots <= 5) return `Nur noch ${session.free_spots} Plätze frei!`
   return `Noch ${session.free_spots} Plätze frei`
+}
+
+function availabilityClass(session: CatalogSession): string {
+  if (session.free_spots === null) return 'text-gray-700'
+  if (session.free_spots === 0) return 'text-red-600 font-semibold'
+  if (session.free_spots <= 5) return 'text-yellow-600 font-medium'
+  return 'text-green-600'
 }
 
 function bookingErrorMessage(unknownError: unknown): string {
@@ -178,7 +186,7 @@ function SessionCard({
                 {session.trainer.name}
                 {session.is_substitute && (
                   <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
-                    Vertretung
+                    ⚠️ Vertretung
                   </span>
                 )}
               </>
@@ -187,13 +195,13 @@ function SessionCard({
         </div>
         <div className="flex gap-2">
           <dt className="font-medium">Frei:</dt>
-          <dd>{availabilityText(session)}</dd>
+          <dd className={availabilityClass(session)}>{availabilityText(session)}</dd>
         </div>
       </dl>
 
       {session.session_info !== null && session.session_info !== '' && (
         <p className="mb-2 rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-900">
-          {session.session_info}
+          💬 Info vom Trainer: {session.session_info}
         </p>
       )}
 
