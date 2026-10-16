@@ -1,56 +1,23 @@
 # Skills-Marker
 
-<!--
-  Welchen Stand des zentralen Skills-Repos dieses Projekt konsumiert hat.
-
-  Diese Datei wird bei jedem `git pull` im Skills-Repo FORTGESCHRIEBEN, nicht
-  abgearbeitet — sie ist ein Cursor, kein Archiv und kein Auftrag (dieselbe
-  Unterscheidung wie `AGENTS.todo.md` im `build-verify`-Flow).
-  Format and Ablauf: Skill `skills-marker` im Skills-Repo.
-  Die HTML-Kommentare sind Arbeitsanleitung und fallen beim ersten Fortschreiben weg.
--->
-
-agents-skills-consumed: 18623c5
-geprüft am: 2026-10-12
+agents-skills-consumed: e33c687
+geprüft am: 2026-10-16
 
 ## Skill-Stand
 
-<!--
-  Eine Zeile je Skill aus `.agents/skills/` des Skills-Repos.
-  `angewendet?`  = ja | nein
-  `wo im Projekt`= `Datei:Zeile` als Beleg (leer bei "nein")
-  `offene Position` = Verweis auf den Eintrag in `AGENTS.todo.md` (leer, wenn nichts offen)
-
-  "Angewendet" heißt: am Code dieses Projekts geprüft — nicht: die Doku gelesen.
-
-  | `playwright-parallel` | ja | `playwright.config.ts:41` | |
-  | `docker-test-image`   | nein | | trifft CI-Image zu, Repo hat keins |
-  Konventionen (Sprache, Größen-Disziplin, eingebettete Regeln) bekommen je eine
-  Zeile wie jeder Skill — nie stillschweigend vorausgesetzt (`skills-marker` §4).
--->
-
 | Skill | angewendet? | wo im Projekt | offene Position |
 |---|---|---|---|
-| | | | |
+| `build-verify` | ja | `AGENTS.md §7` | |
+| `web-audit` | ja | `AGENTS.md §1` | `AGENTS.todo.md` (`web-audit`-Log, kein Auftrag) |
 
-## Offen aus dem Bereich `<alter-sha>..<neuer-sha>`
+## Offen aus dem Bereich `18623c5..e33c687`
 
-<!--
-  Nur während eines Prüflaufs. Listet genau die Skills, die in dieser Range neu
-  dazugekommen oder geändert wurden — mit dem Ergebnis der Prüfung. Wird beim
-  Fortschreiben durch den nächsten Abschnitt ersetzt; bleibt die Liste leer, wird
-  dieser Abschnitt ganz entfernt.
+Range: `59f9533` (neu: `web-audit`), `86d677e` + `e33c687` (beide `docs(build-verify)`).
 
-  Neu:       git -C <skills-repo> log --diff-filter=A --name-only <alt>..HEAD -- .agents/skills
-  Geändert: git -C <skills-repo> log --name-only --format= <alt>..HEAD -- .agents/skills | sort -u
--->
-
-_Kein Vor-Stand: bei einem neu angelegten Projekt gibt es keine Range, weil noch nichts
-geprüft werden musste. Dieser Abschnitt wird beim ersten Pull im Skills-Repo angelegt._
+- `build-verify` (Verifier prüft Substanz statt Gates + optionaler Milestone-Review): trifft zu, ist drin — Verify-Flow per `AGENTS.md §7` (Verifier ≠ Implementer). Die Regeländerung betrifft hier nichts: kein lokales Gate-Re-Run-Duplikat, Milestone-Review ist optional und keine Per-Feature-Pflicht. Keine offene Position.
+- `web-audit` (neu: Website-Audit mit False-Positive-Gate): trifft zu — Booking-Frontend (`AGENTS.md §1`) ist künftiges Audit-Ziel; bisher keine Live-Audit-Praxis → offene Position als Log in `AGENTS.todo.md` (`web-audit`-Log, kein Auftrag).
 
 ## Fortschreiben
-
-<!-- Dieser Abschnitt bleibt stehen — er ist die Anleitung für den nächsten Pull. -->
 
 1. `agents-skills-consumed` ablesen → `<alt>`.
 2. Im Skills-Repo die Range bilden:

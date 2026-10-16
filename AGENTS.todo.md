@@ -11,6 +11,7 @@ Stand: 2026-10-14. Nur offene TODO-Positionen.
 - [ ] Playwright-Config mit Tags `@smoke` / `@regression` / `@feature:<name>` — AGENTS.md §4
 - [ ] i18n-Setup nach Skill `react-i18n` (Lingui), sobald erste deutsche UI-Strings landen
 - [ ] Entscheiden: `backend/.claude/`-Skills (35 Dateien, von `boost:install`) im Repo behalten oder global ignorieren
+- [ ] `web-audit`-Log (Skills-Range `18623c5..e33c687`, kein Auftrag): Booking-Frontend als künftiges Audit-Ziel nach Skill `web-audit` (False-Positive-Gate) vormerken — bisher keine Live-Audit-Praxis; erst beim ersten Live-Audit entscheiden, kein Vorab-Umbau
 
 ## Erledigt (Stand: 2026-10-14)
 
