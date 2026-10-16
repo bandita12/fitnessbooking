@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Course;
 use App\Models\Studio;
+use App\Models\User;
+use App\Enums\UserRole;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -16,6 +18,28 @@ class CourseController extends Controller
         $model = Studio::forTenant($request->user())->findOrFail($studio);
 
         return response()->json($model->courses()->get());
+    }
+
+    /**
+     * Combined payload for the course planning form: courses, trainers
+     * and rooms in a single roundtrip. Shapes match the three
+     * single-resource endpoints exactly.
+     */
+    public function overview(Request $request, int $studio): JsonResponse
+    {
+        $model = Studio::forTenant($request->user())->findOrFail($studio);
+
+        $pivot = $model->trainers()->get(['users.id', 'users.name', 'users.email']);
+        $direct = User::where('role', UserRole::Trainer->value)
+            ->where('studio_id', $model->id)
+            ->get(['id', 'name', 'email']);
+        $trainers = $pivot->concat($direct)->unique('id')->values();
+
+        return response()->json([
+            'courses' => $model->courses()->get(),
+            'trainers' => $trainers,
+            'rooms' => $model->rooms()->get(),
+        ]);
     }
 
     public function store(Request $request, int $studio): JsonResponse

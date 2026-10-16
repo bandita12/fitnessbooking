@@ -34,7 +34,7 @@ import {
 import {
   createCourse,
   generateSessions,
-  listCourses,
+  getCourseOverview,
   updateCourse,
   weekdayName,
   type Course,
@@ -1188,8 +1188,6 @@ function CoursesSection({ studioId }: { studioId: number }) {
   const [rooms, setRooms] = useState<Room[]>([])
   const [loading, setLoading] = useState(true)
   const [coursesError, setCoursesError] = useState<string | null>(null)
-  const [trainersError, setTrainersError] = useState<string | null>(null)
-  const [roomsError, setRoomsError] = useState<string | null>(null)
   const [form, setForm] = useState<CourseFormState>(emptyCourseForm)
   const [editingCourseId, setEditingCourseId] = useState<number | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -1204,30 +1202,18 @@ function CoursesSection({ studioId }: { studioId: number }) {
 
   useEffect(() => {
     let active = true
-    // allSettled statt Promise.all: ein fehlender Teil (z. B. Trainer) darf
-    // die übrigen Dropdowns (z. B. Räume) nicht mit leeren.
-    Promise.allSettled([
-      listCourses(studioId),
-      listTrainers(studioId),
-      listRooms(studioId),
-    ])
-      .then(([courseResult, trainerResult, roomResult]) => {
+    // Ein kombinierter Request statt drei parallelen: unter
+    // `php artisan serve` (single-threaded) serialisieren parallele
+    // Requests inkl. je einem Laravel-Boot spürbar.
+    getCourseOverview(studioId)
+      .then((overview) => {
         if (!active) return
-        if (courseResult.status === 'fulfilled') {
-          setCourses(courseResult.value)
-        } else {
-          setCoursesError('Kurse konnten nicht geladen werden.')
-        }
-        if (trainerResult.status === 'fulfilled') {
-          setTrainers(trainerResult.value)
-        } else {
-          setTrainersError('Trainer konnten nicht geladen werden.')
-        }
-        if (roomResult.status === 'fulfilled') {
-          setRooms(roomResult.value)
-        } else {
-          setRoomsError('Räume konnten nicht geladen werden.')
-        }
+        setCourses(overview.courses)
+        setTrainers(overview.trainers)
+        setRooms(overview.rooms)
+      })
+      .catch(() => {
+        if (active) setCoursesError('Kurse konnten nicht geladen werden.')
       })
       .finally(() => {
         if (active) setLoading(false)
@@ -1604,9 +1590,9 @@ function CoursesSection({ studioId }: { studioId: number }) {
                 </option>
               ))}
             </select>
-            {trainersError !== null && (
+            {coursesError !== null && (
               <p role="alert" className="mt-1 text-sm text-red-600">
-                {trainersError}
+                Trainer konnten nicht geladen werden.
               </p>
             )}
           </label>
@@ -1625,9 +1611,9 @@ function CoursesSection({ studioId }: { studioId: number }) {
                 </option>
               ))}
             </select>
-            {roomsError !== null && (
+            {coursesError !== null && (
               <p role="alert" className="mt-1 text-sm text-red-600">
-                {roomsError}
+                Räume konnten nicht geladen werden.
               </p>
             )}
           </label>

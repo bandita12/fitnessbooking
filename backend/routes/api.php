@@ -49,6 +49,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::delete('/studios/{studio}/trainers/{trainer}', [StudioTrainerController::class, 'destroy'])->can('courses.manage');
     Route::put('/studios/{studio}/trainers/{trainer}', [StudioTrainerController::class, 'update'])->can('courses.manage');
 
+    Route::get('/studios/{studio}/courses/overview', [CourseController::class, 'overview'])->can('courses.view');
     Route::get('/studios/{studio}/courses', [CourseController::class, 'index'])->can('courses.view');
     Route::post('/studios/{studio}/courses', [CourseController::class, 'store'])->can('courses.manage');
     Route::put('/studios/{studio}/courses/{course}', [CourseController::class, 'update'])->can('courses.manage');

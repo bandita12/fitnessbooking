@@ -1,5 +1,7 @@
 import client from './client'
+import type { Room } from './rooms'
 import type { CourseSession } from './sessions'
+import type { Trainer } from './trainers'
 
 export interface Course {
   id: number
@@ -52,6 +54,19 @@ export function weekdayName(dayOfWeek: number): string {
 
 export async function listCourses(studioId: number): Promise<Course[]> {
   const { data } = await client.get<Course[]>(`/api/studios/${studioId}/courses`)
+  return data
+}
+
+export interface CourseOverview {
+  courses: Course[]
+  trainers: Trainer[]
+  rooms: Room[]
+}
+
+export async function getCourseOverview(studioId: number): Promise<CourseOverview> {
+  const { data } = await client.get<CourseOverview>(
+    `/api/studios/${studioId}/courses/overview`,
+  )
   return data
 }
 
