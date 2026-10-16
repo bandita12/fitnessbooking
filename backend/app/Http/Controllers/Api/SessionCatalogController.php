@@ -58,6 +58,7 @@ class SessionCatalogController extends Controller
             'my_booking_id' => $bookingIds->get($session->id),
             'course' => [
                 'id' => $session->course->id,
+                'studio_id' => $session->course->studio_id,
                 'trainer_id' => $session->course->trainer_id,
                 'title' => $session->course->title,
                 'start_time' => substr((string) $session->course->start_time, 0, 5),

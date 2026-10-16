@@ -28,6 +28,11 @@ export async function listStudios(): Promise<Studio[]> {
   return data
 }
 
+export async function listAllStudios(): Promise<Studio[]> {
+  const { data } = await client.get<Studio[]>('/api/studios')
+  return data
+}
+
 export async function createStudio(studio: NewStudio): Promise<Studio> {
   const { data } = await client.post<Studio>('/api/admin/studios', studio)
   return data

@@ -21,6 +21,7 @@ export interface SessionUpdate {
 
 export interface CatalogCourse {
   id: number
+  studio_id: number
   trainer_id: number | null
   title: string
   start_time: string
@@ -71,8 +72,24 @@ export async function updateCatalogSession(
   return data
 }
 
-export async function listCatalog(): Promise<CatalogSession[]> {
-  const { data } = await client.get<CatalogSession[]>('/api/course_sessions')
+export interface CatalogFilters {
+  from?: string
+  to?: string
+  studio_id?: number | null
+}
+
+export async function listCatalog(
+  filters: CatalogFilters = {},
+): Promise<CatalogSession[]> {
+  const params: Record<string, string> = {}
+  if (filters.from !== undefined) params.from = filters.from
+  if (filters.to !== undefined) params.to = filters.to
+  if (filters.studio_id !== undefined && filters.studio_id !== null) {
+    params.studio_id = String(filters.studio_id)
+  }
+  const { data } = await client.get<CatalogSession[]>('/api/course_sessions', {
+    params,
+  })
   return data
 }
 

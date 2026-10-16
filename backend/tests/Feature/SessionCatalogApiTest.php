@@ -65,6 +65,7 @@ class SessionCatalogApiTest extends TestCase
 
         $response->assertJsonCount(1);
         $response->assertJsonPath('0.course.title', 'Kurs');
+        $response->assertJsonPath('0.course.studio_id', $studio->id);
         $response->assertJsonPath('0.room.name', 'Saal');
         $response->assertJsonPath('0.room.lighting', 'led');
         $response->assertJsonPath('0.free_spots', 9);

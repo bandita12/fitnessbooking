@@ -6,11 +6,11 @@ import { useAuth } from './context/useAuth'
 import CoursesPage from './pages/CoursesPage'
 import DashboardPage from './pages/DashboardPage'
 
-type MainView = 'dashboard' | 'courses'
+type MainView = 'courses' | 'dashboard'
 
 function Shell() {
   const { user, loading, logout } = useAuth()
-  const [view, setView] = useState<MainView>('dashboard')
+  const [view, setView] = useState<MainView>('courses')
 
   if (loading) {
     return <p className="p-8 text-center text-gray-600">Wird geladen …</p>
@@ -21,28 +21,28 @@ function Shell() {
   }
 
   const isStaff = user.role === 'admin' || user.role === 'studio_admin'
-  const showCourses = !isStaff || (user.role === 'admin' && view === 'courses')
+  const showDashboard = isStaff && view === 'dashboard'
 
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="flex items-center justify-between bg-white px-8 py-4 shadow-sm">
         <div className="flex items-center gap-4">
           <span className="font-semibold text-gray-900">Fitnessbooking</span>
-          {user.role === 'admin' && (
+          {isStaff && (
             <nav className="flex gap-2" aria-label="Hauptmenü">
               <button
                 type="button"
-                onClick={() => setView('dashboard')}
-                className={`rounded-md px-3 py-1 text-sm font-medium ${view === 'dashboard' ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+                onClick={() => setView('courses')}
+                className={`rounded-md px-3 py-1 text-sm font-medium ${!showDashboard ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
               >
-                Dashboard
+                Kursübersicht
               </button>
               <button
                 type="button"
-                onClick={() => setView('courses')}
-                className={`rounded-md px-3 py-1 text-sm font-medium ${view === 'courses' ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+                onClick={() => setView('dashboard')}
+                className={`rounded-md px-3 py-1 text-sm font-medium ${showDashboard ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
               >
-                Kursübersicht
+                Zur Studio-Verwaltung
               </button>
             </nav>
           )}
@@ -60,13 +60,15 @@ function Shell() {
           </button>
         </div>
       </header>
-      {showCourses ? (
-        <ProtectedRoute allowedRoles={['admin', 'studio_admin', 'trainer', 'customer']}>
-          <CoursesPage />
-        </ProtectedRoute>
-      ) : (
+      {showDashboard ? (
         <ProtectedRoute allowedRoles={['admin', 'studio_admin']}>
           <DashboardPage />
+        </ProtectedRoute>
+      ) : (
+        <ProtectedRoute
+          allowedRoles={['admin', 'studio_admin', 'trainer', 'customer']}
+        >
+          <CoursesPage />
         </ProtectedRoute>
       )}
     </div>
