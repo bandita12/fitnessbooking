@@ -25,7 +25,7 @@ class SessionCatalogController extends Controller
         $from = $data['from'] ?? now()->format('Y-m-d');
         $to = $data['to'] ?? now()->addWeeks(4)->format('Y-m-d');
 
-        $sessions = CourseSession::with(['course', 'room', 'trainer', 'course.leadTrainer'])
+        $sessions = CourseSession::with(['course', 'course.room', 'room', 'trainer', 'course.leadTrainer'])
             ->withCount('bookings')
             ->whereIn('status', ['scheduled', 'substituted'])
             ->whereDate('date', '>=', $from)
@@ -43,7 +43,10 @@ class SessionCatalogController extends Controller
             ->pluck('id', 'course_session_id')
             ->mapWithKeys(fn (int $id, string|int $sessionId): array => [(int) $sessionId => $id]);
 
-        return response()->json($sessions->map(fn (CourseSession $session): array => [
+        return response()->json($sessions->map(function (CourseSession $session) use ($bookingIds): array {
+            $effectiveRoom = $session->room ?? $session->course->room;
+
+            return [
             'id' => $session->id,
             'date' => $session->date->format('Y-m-d'),
             'status' => $session->status,
@@ -64,17 +67,17 @@ class SessionCatalogController extends Controller
                 'start_time' => substr((string) $session->course->start_time, 0, 5),
                 'end_time' => substr((string) $session->course->end_time, 0, 5),
             ],
-            'room' => $session->room === null ? null : [
-                'id' => $session->room->id,
-                'name' => $session->room->name,
-                'capacity' => $session->room->capacity,
-                'size_sqm' => $session->room->size_sqm,
-                'lighting' => $session->room->lighting,
+            'room' => $effectiveRoom === null ? null : [
+                'id' => $effectiveRoom->id,
+                'name' => $effectiveRoom->name,
+                'capacity' => $effectiveRoom->capacity,
+                'size_sqm' => $effectiveRoom->size_sqm,
+                'lighting' => $effectiveRoom->lighting,
             ],
             'trainer' => ($session->trainer ?? $session->course->leadTrainer) === null ? null : [
                 'id' => ($session->trainer ?? $session->course->leadTrainer)->id,
                 'name' => ($session->trainer ?? $session->course->leadTrainer)->name,
             ],
-        ])->all());
+        ]; })->all());
     }
 }

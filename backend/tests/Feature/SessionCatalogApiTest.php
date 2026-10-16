@@ -113,4 +113,79 @@ class SessionCatalogApiTest extends TestCase
     {
         $this->getJson('/api/course_sessions')->assertUnauthorized();
     }
+
+    public function test_catalog_falls_back_to_course_room(): void
+    {
+        $studio = Studio::factory()->create();
+        $customer = User::factory()->create(['role' => UserRole::Customer->value]);
+        $courseRoom = Room::create([
+            'studio_id' => $studio->id,
+            'name' => 'Kursraum',
+            'capacity' => 15,
+            'size_sqm' => 80,
+            'lighting' => 'hell',
+        ]);
+        $course = Course::create([
+            'studio_id' => $studio->id,
+            'room_id' => $courseRoom->id,
+            'title' => 'Kurs mit Raum',
+            'day_of_week' => 1,
+            'start_time' => '09:00:00',
+            'end_time' => '10:00:00',
+            'capacity' => null,
+        ]);
+        CourseSession::create([
+            'course_id' => $course->id,
+            'room_id' => null,
+            'date' => now()->addDay()->format('Y-m-d'),
+            'status' => 'scheduled',
+            'capacity' => null,
+        ]);
+        Sanctum::actingAs($customer);
+
+        $this->getJson('/api/course_sessions')
+            ->assertOk()
+            ->assertJsonCount(1)
+            ->assertJsonPath('0.room.name', 'Kursraum')
+            ->assertJsonPath('0.free_spots', 15);
+    }
+
+    public function test_catalog_prefers_session_room_over_course_room(): void
+    {
+        $studio = Studio::factory()->create();
+        $customer = User::factory()->create(['role' => UserRole::Customer->value]);
+        $courseRoom = Room::create([
+            'studio_id' => $studio->id,
+            'name' => 'Kursraum',
+            'capacity' => 15,
+        ]);
+        $sessionRoom = Room::create([
+            'studio_id' => $studio->id,
+            'name' => 'Sessionsraum',
+            'capacity' => 25,
+        ]);
+        $course = Course::create([
+            'studio_id' => $studio->id,
+            'room_id' => $courseRoom->id,
+            'title' => 'Kurs',
+            'day_of_week' => 1,
+            'start_time' => '09:00:00',
+            'end_time' => '10:00:00',
+            'capacity' => null,
+        ]);
+        CourseSession::create([
+            'course_id' => $course->id,
+            'room_id' => $sessionRoom->id,
+            'date' => now()->addDay()->format('Y-m-d'),
+            'status' => 'scheduled',
+            'capacity' => null,
+        ]);
+        Sanctum::actingAs($customer);
+
+        $this->getJson('/api/course_sessions')
+            ->assertOk()
+            ->assertJsonCount(1)
+            ->assertJsonPath('0.room.name', 'Sessionsraum')
+            ->assertJsonPath('0.free_spots', 25);
+    }
 }

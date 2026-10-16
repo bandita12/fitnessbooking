@@ -47,9 +47,8 @@ function shortDate(isoDate: string): string {
 function availabilityText(session: CatalogSession): string {
   if (session.free_spots === null) return 'Anmeldung möglich'
   if (session.free_spots === 0) return 'Ausgebucht'
-  if (session.free_spots === 1) return 'Nur noch 1 Platz frei!'
-  if (session.free_spots <= 5) return `Nur noch ${session.free_spots} Plätze frei!`
-  return `Noch ${session.free_spots} Plätze frei`
+  if (session.free_spots === 1) return '1 freier Platz'
+  return `${session.free_spots} freie Plätze`
 }
 
 function availabilityClass(session: CatalogSession): string {

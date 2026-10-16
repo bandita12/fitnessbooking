@@ -57,12 +57,13 @@ class CourseSession extends Model
 
     /**
      * Capacity cascade: first non-null wins
-     * (session → course → room).
+     * (session → course → session room → course room).
      */
     public function effectiveCapacity(): ?int
     {
         return $this->capacity
             ?? $this->course->capacity
-            ?? $this->room?->capacity;
+            ?? $this->room?->capacity
+            ?? $this->course->room?->capacity;
     }
 }
