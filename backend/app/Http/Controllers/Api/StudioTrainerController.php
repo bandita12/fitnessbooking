@@ -8,6 +8,7 @@ use App\Models\Studio;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class StudioTrainerController extends Controller
 {
@@ -31,14 +32,18 @@ class StudioTrainerController extends Controller
             'password' => ['required', 'string', 'min:8'],
         ]);
 
-        $trainer = User::create([
-            'name' => $data['name'],
-            'email' => $data['email'],
-            'password' => $data['password'],
-            'studio_id' => null,
-            'role' => UserRole::Trainer,
-        ]);
-        $model->trainers()->syncWithoutDetaching([$trainer->id]);
+        $trainer = DB::transaction(function () use ($model, $data): User {
+            $created = User::create([
+                'name' => $data['name'],
+                'email' => $data['email'],
+                'password' => $data['password'],
+                'studio_id' => null,
+                'role' => UserRole::Trainer,
+            ]);
+            $model->trainers()->syncWithoutDetaching([$created->id]);
+
+            return $created;
+        });
 
         return response()->json(
             $trainer->only(['id', 'name', 'email', 'role']),
