@@ -406,7 +406,8 @@ Regeln:
 | `PUT /api/studios/{studio}/courses/{course}/sessions/{session}` | PUT | `auth:sanctum` + `can:courses.manage` | `CoursePolicy` (update) |
 | `POST /api/studios/{studio}/courses/{course}/sessions/generate` | POST | `auth:sanctum` + `can:courses.manage` | `CoursePolicy` (update) — erzeugt idempotent die Termine der nächsten N Wochen (Default 4, max 12) |
 | `GET /api/bookings` | GET | `auth:sanctum` + `can:bookings.manage` | `BookingPolicy` (view, via Scope) |
-| `GET /api/course_sessions` | GET | `auth:sanctum` + `can:courses.view` | — (Katalog: nur `scheduled`/`substituted`, Filter `from`/`to`/`studio_id`, mit `free_spots` + `my_booking_id`) |
+| `GET /api/course_sessions` | GET | `auth:sanctum` + `can:courses.view` | — (Katalog: nur `scheduled`/`substituted`, Filter `from`/`to`/`studio_id`, mit `free_spots` + `my_booking_id` + `trainer_id`) |
+| `PUT /api/course_sessions/{session}` | PUT | `auth:sanctum` + `can:course-updates.create` | — (Rollen-Scopes → 404; Trainer nur `status`/`session_info`, Rest Admins) |
 | `POST /api/courses/{course}/updates` | POST | `auth:sanctum` + `can:course-updates.create` | `CoursePolicy` (Pivot/Studio) |
 | `PUT /api/courses/{course}/updates/{update}` | PUT | `auth:sanctum` + `can:course-updates.create` | `CoursePolicy` (Pivot/Studio) |
 | `POST /api/bookings` | POST | `auth:sanctum` + `can:bookings.manage` | — (Kapazität + Unique) |

@@ -1,7 +1,13 @@
 import axios from 'axios'
 import { useEffect, useState } from 'react'
 import { bookSession, cancelBooking } from '../api/bookings'
-import { listCatalog, type CatalogSession } from '../api/sessions'
+import {
+  listCatalog,
+  updateCatalogSession,
+  type CatalogSession,
+  type SessionStatus,
+} from '../api/sessions'
+import { useAuth } from '../context/useAuth'
 
 function formatDate(isoDate: string): string {
   const [year, month, day] = isoDate.split('-').map(Number)
@@ -26,10 +32,17 @@ function SessionCard({
   session: CatalogSession
   onChanged: () => void
 }) {
+  const { user } = useAuth()
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [editStatus, setEditStatus] = useState<SessionStatus>(session.status)
+  const [editInfo, setEditInfo] = useState(session.session_info ?? '')
   const booked = session.my_booking_id !== null
   const soldOut = session.free_spots === 0
+  const mayEdit =
+    user?.role === 'trainer' &&
+    (session.course.trainer_id === user.id || session.trainer_id === user.id)
 
   async function handleBook() {
     setError(null)
@@ -50,6 +63,23 @@ function SessionCard({
     setBusy(true)
     try {
       await cancelBooking(session.my_booking_id)
+      onChanged()
+    } catch (unknownError: unknown) {
+      setError(bookingErrorMessage(unknownError))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleEditSave() {
+    setError(null)
+    setBusy(true)
+    try {
+      await updateCatalogSession(session.id, {
+        status: editStatus,
+        session_info: editInfo.trim() === '' ? null : editInfo.trim(),
+      })
+      setEditing(false)
       onChanged()
     } catch (unknownError: unknown) {
       setError(bookingErrorMessage(unknownError))
@@ -110,6 +140,64 @@ function SessionCard({
         <p role="alert" className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
         </p>
+      )}
+
+      {mayEdit && !editing && (
+        <button
+          type="button"
+          onClick={() => {
+            setEditStatus(
+              session.status === 'scheduled' || session.status === 'cancelled'
+                ? session.status
+                : 'scheduled',
+            )
+            setEditInfo(session.session_info ?? '')
+            setEditing(true)
+          }}
+          className="mb-3 w-full rounded-md border border-indigo-600 px-4 py-2 text-sm font-medium text-indigo-600 hover:bg-indigo-50"
+        >
+          Session bearbeiten
+        </button>
+      )}
+
+      {mayEdit && editing && (
+        <div className="mb-3 space-y-2 rounded-md border border-indigo-200 p-3">
+          <select
+            aria-label="Status"
+            value={editStatus}
+            onChange={(event) =>
+              setEditStatus(event.target.value as SessionStatus)
+            }
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 focus:border-indigo-500 focus:outline-none"
+          >
+            <option value="scheduled">Geplant</option>
+            <option value="cancelled">Abgesagt</option>
+          </select>
+          <textarea
+            aria-label="Mitteilung an Teilnehmer"
+            placeholder="z. B. Bitte eigene Matte mitbringen!"
+            value={editInfo}
+            onChange={(event) => setEditInfo(event.target.value)}
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 focus:border-indigo-500 focus:outline-none"
+          />
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void handleEditSave()}
+              className="flex-1 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {busy ? 'Wird gespeichert …' : 'Speichern'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+            >
+              Abbrechen
+            </button>
+          </div>
+        </div>
       )}
 
       {booked ? (

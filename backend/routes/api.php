@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\CourseSessionController;
 use App\Http\Controllers\Api\FitnessTestController;
 use App\Http\Controllers\Api\RoomController;
 use App\Http\Controllers\Api\SessionCatalogController;
+use App\Http\Controllers\Api\SessionController;
 use App\Http\Controllers\Api\StudioController;
 use App\Http\Controllers\Api\StudioTrainerController;
 use Illuminate\Http\Request;
@@ -60,6 +61,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
 
     Route::get('/bookings', [BookingController::class, 'index'])->can('bookings.manage');
     Route::get('/course_sessions', [SessionCatalogController::class, 'index'])->can('courses.view');
+    Route::put('/course_sessions/{session}', [SessionController::class, 'update'])->can('course-updates.create');
     Route::post('/bookings', [BookingController::class, 'store'])->can('bookings.manage');
     Route::delete('/bookings/{booking}', [BookingController::class, 'destroy'])->can('bookings.manage');
 });

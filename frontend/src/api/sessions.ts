@@ -21,6 +21,7 @@ export interface SessionUpdate {
 
 export interface CatalogCourse {
   id: number
+  trainer_id: number | null
   title: string
   start_time: string
   end_time: string
@@ -47,10 +48,27 @@ export interface CatalogSession {
   capacity: number | null
   free_spots: number | null
   is_substitute: boolean
+  trainer_id: number | null
   my_booking_id: number | null
   course: CatalogCourse
   room: CatalogRoom | null
   trainer: CatalogTrainer | null
+}
+
+export interface CatalogSessionUpdate {
+  status?: SessionStatus
+  session_info?: string | null
+}
+
+export async function updateCatalogSession(
+  sessionId: number,
+  update: CatalogSessionUpdate,
+): Promise<CatalogSession> {
+  const { data } = await client.put<CatalogSession>(
+    `/api/course_sessions/${sessionId}`,
+    update,
+  )
+  return data
 }
 
 export async function listCatalog(): Promise<CatalogSession[]> {

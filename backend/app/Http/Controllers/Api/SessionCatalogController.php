@@ -54,9 +54,11 @@ class SessionCatalogController extends Controller
                 : max(0, $session->effectiveCapacity() - $session->bookings_count),
             'is_substitute' => $session->trainer_id !== null
                 && $session->trainer_id !== $session->course->trainer_id,
+            'trainer_id' => $session->trainer_id,
             'my_booking_id' => $bookingIds->get($session->id),
             'course' => [
                 'id' => $session->course->id,
+                'trainer_id' => $session->course->trainer_id,
                 'title' => $session->course->title,
                 'start_time' => substr((string) $session->course->start_time, 0, 5),
                 'end_time' => substr((string) $session->course->end_time, 0, 5),
