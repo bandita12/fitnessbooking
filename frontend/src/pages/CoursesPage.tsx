@@ -170,9 +170,7 @@ function SessionCard({
         <div className="flex gap-2">
           <dt className="font-medium">Raum:</dt>
           <dd>
-            {session.room === null
-              ? 'Wird noch bekannt gegeben'
-              : `${session.room.name}${session.room.size_sqm !== null ? ` (${session.room.size_sqm} m²)` : ''}${session.room.lighting !== null ? ` · ${session.room.lighting}` : ''}`}
+            {session.room === null ? 'Wird noch bekannt gegeben' : session.room.name}
           </dd>
         </div>
         <div className="flex gap-2">
