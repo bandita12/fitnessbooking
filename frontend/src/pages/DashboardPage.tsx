@@ -22,6 +22,20 @@ import {
   registerTrainer,
   type Trainer,
 } from '../api/trainers'
+import {
+  createCourse,
+  generateSessions,
+  listCourses,
+  weekdayName,
+  type Course,
+  type NewCourse,
+} from '../api/courses'
+import {
+  listSessions,
+  updateSession,
+  type CourseSession,
+  type SessionStatus,
+} from '../api/sessions'
 import { useAuth } from '../context/useAuth'
 
 type Tab = 'studios' | 'admins'
@@ -377,7 +391,7 @@ export default function DashboardPage() {
   )
 }
 
-type StudioTab = 'rooms' | 'trainers'
+type StudioTab = 'rooms' | 'trainers' | 'courses'
 
 function StudioAdminDashboard({ studioId }: { studioId: number }) {
   const [tab, setTab] = useState<StudioTab>('rooms')
@@ -402,12 +416,17 @@ function StudioAdminDashboard({ studioId }: { studioId: number }) {
         >
           Trainer
         </button>
+        <button
+          type="button"
+          onClick={() => setTab('courses')}
+          className={`rounded-md px-4 py-2 font-medium ${tab === 'courses' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 border border-gray-300'}`}
+        >
+          Kurse verwalten
+        </button>
       </div>
-      {tab === 'rooms' ? (
-        <RoomsSection studioId={studioId} />
-      ) : (
-        <TrainersSection studioId={studioId} />
-      )}
+      {tab === 'rooms' && <RoomsSection studioId={studioId} />}
+      {tab === 'trainers' && <TrainersSection studioId={studioId} />}
+      {tab === 'courses' && <CoursesSection studioId={studioId} />}
     </main>
   )
 }
@@ -784,6 +803,431 @@ function RoomsSection({ studioId }: { studioId: number }) {
               </button>
             )}
           </div>
+        </form>
+      </section>
+    </div>
+  )
+}
+
+interface CourseFormState {
+  title: string
+  description: string
+  day_of_week: string
+  start_time: string
+  end_time: string
+  trainer_id: string
+  thumbnail_url: string
+  image_url: string
+  web_link: string
+  capacity: string
+  generate: boolean
+}
+
+const emptyCourseForm: CourseFormState = {
+  title: '',
+  description: '',
+  day_of_week: '1',
+  start_time: '09:00',
+  end_time: '10:00',
+  trainer_id: '',
+  thumbnail_url: '',
+  image_url: '',
+  web_link: '',
+  capacity: '',
+  generate: true,
+}
+
+function CoursesSection({ studioId }: { studioId: number }) {
+  const [courses, setCourses] = useState<Course[]>([])
+  const [trainers, setTrainers] = useState<Trainer[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [form, setForm] = useState<CourseFormState>(emptyCourseForm)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [expandedId, setExpandedId] = useState<number | null>(null)
+  const [sessions, setSessions] = useState<Record<number, CourseSession[]>>({})
+  const [editingSessionId, setEditingSessionId] = useState<number | null>(null)
+  const [editTrainer, setEditTrainer] = useState('')
+  const [editStatus, setEditStatus] = useState<SessionStatus>('scheduled')
+  const [editInfo, setEditInfo] = useState('')
+
+  useEffect(() => {
+    let active = true
+    Promise.all([listCourses(studioId), listTrainers(studioId)])
+      .then(([courseData, trainerData]) => {
+        if (active) {
+          setCourses(courseData)
+          setTrainers(trainerData)
+        }
+      })
+      .catch(() => {
+        if (active) setLoadError('Kurse konnten nicht geladen werden.')
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [studioId])
+
+  function setField(field: keyof Omit<CourseFormState, 'generate'>, value: string) {
+    setForm((previous) => ({ ...previous, [field]: value }))
+  }
+
+  async function handleCreate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setNotice(null)
+    setError(null)
+    setSaving(true)
+    try {
+      const payload: NewCourse = {
+        title: form.title.trim(),
+        description: form.description.trim() === '' ? undefined : form.description.trim(),
+        day_of_week: Number(form.day_of_week),
+        start_time: form.start_time.length === 5 ? `${form.start_time}:00` : form.start_time,
+        end_time: form.end_time.length === 5 ? `${form.end_time}:00` : form.end_time,
+        trainer_id: form.trainer_id === '' ? null : Number(form.trainer_id),
+        thumbnail_url: form.thumbnail_url.trim() === '' ? undefined : form.thumbnail_url.trim(),
+        image_url: form.image_url.trim() === '' ? undefined : form.image_url.trim(),
+        web_link: form.web_link.trim() === '' ? undefined : form.web_link.trim(),
+        capacity: form.capacity.trim() === '' ? null : Number(form.capacity),
+      }
+      const created = await createCourse(studioId, payload)
+      let suffix = ''
+      if (form.generate) {
+        const generated = await generateSessions(studioId, created.id, 4)
+        suffix = ` ${generated.created} Termine für 4 Wochen angelegt.`
+      }
+      setCourses((previous) => [...previous, created])
+      setForm(emptyCourseForm)
+      setNotice(`Kurs „${created.title}“ wurde angelegt.${suffix}`)
+    } catch (unknownError: unknown) {
+      setError(errorMessage(unknownError, 'Kurs konnte nicht angelegt werden.'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function toggleSessions(course: Course) {
+    if (expandedId === course.id) {
+      setExpandedId(null)
+      return
+    }
+    setExpandedId(course.id)
+    setEditingSessionId(null)
+    try {
+      const data = await listSessions(studioId, course.id)
+      setSessions((previous) => ({ ...previous, [course.id]: data }))
+    } catch (unknownError: unknown) {
+      setError(errorMessage(unknownError, 'Termine konnten nicht geladen werden.'))
+    }
+  }
+
+  async function handleGenerate(course: Course) {
+    setNotice(null)
+    setError(null)
+    try {
+      const generated = await generateSessions(studioId, course.id, 4)
+      const data = await listSessions(studioId, course.id)
+      setSessions((previous) => ({ ...previous, [course.id]: data }))
+      if (expandedId !== course.id) setExpandedId(course.id)
+      setNotice(`${generated.created} Termine für „${course.title}“ angelegt.`)
+    } catch (unknownError: unknown) {
+      setError(errorMessage(unknownError, 'Termine konnten nicht erzeugt werden.'))
+    }
+  }
+
+  function startSessionEdit(session: CourseSession) {
+    setEditingSessionId(session.id)
+    setEditTrainer(session.trainer_id === null ? '' : String(session.trainer_id))
+    setEditStatus(session.status)
+    setEditInfo(session.session_info ?? '')
+  }
+
+  async function handleSessionSave(courseId: number) {
+    if (editingSessionId === null) return
+    setNotice(null)
+    setError(null)
+    try {
+      const updated = await updateSession(studioId, courseId, editingSessionId, {
+        trainer_id: editTrainer === '' ? null : Number(editTrainer),
+        status: editStatus,
+        session_info: editInfo.trim() === '' ? null : editInfo.trim(),
+      })
+      setSessions((previous) => ({
+        ...previous,
+        [courseId]: (previous[courseId] ?? []).map((entry) =>
+          entry.id === updated.id ? updated : entry,
+        ),
+      }))
+      setEditingSessionId(null)
+      setNotice('Termin wurde gespeichert.')
+    } catch (unknownError: unknown) {
+      setError(errorMessage(unknownError, 'Termin konnte nicht gespeichert werden.'))
+    }
+  }
+
+  function trainerName(trainerId: number | null): string {
+    if (trainerId === null) return 'Lead-Trainer'
+    return trainers.find((entry) => entry.id === trainerId)?.name ?? 'Unbekannt'
+  }
+
+  const inputClass =
+    'w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 focus:border-indigo-500 focus:outline-none'
+
+  return (
+    <div className="grid gap-8 md:grid-cols-2">
+      <section className="rounded-lg bg-white p-6 shadow-md">
+        <h2 className="mb-4 text-xl font-semibold text-gray-900">Kursvorlagen</h2>
+        {loading && <p className="text-gray-600">Wird geladen …</p>}
+        {loadError !== null && (
+          <p role="alert" className="text-sm text-red-600">
+            {loadError}
+          </p>
+        )}
+        <ul className="space-y-2">
+          {courses.map((course) => (
+            <li
+              key={course.id}
+              className="rounded-md border border-gray-200 px-3 py-2"
+            >
+              <button
+                type="button"
+                onClick={() => void toggleSessions(course)}
+                className="flex w-full items-center justify-between gap-2 text-left"
+              >
+                <div>
+                  <span className="font-medium text-gray-900">{course.title}</span>
+                  <span className="block text-sm text-gray-600">
+                    {weekdayName(course.day_of_week)} · {course.start_time.slice(0, 5)}–
+                    {course.end_time.slice(0, 5)} · {trainerName(course.trainer_id)}
+                  </span>
+                </div>
+                <span className="text-sm text-indigo-600">
+                  {expandedId === course.id ? 'Schließen' : 'Termine'}
+                </span>
+              </button>
+              {expandedId === course.id && (
+                <div className="mt-3 space-y-2 border-t border-gray-100 pt-3">
+                  {(sessions[course.id] ?? []).map((session) => (
+                    <div
+                      key={session.id}
+                      className="rounded-md bg-gray-50 px-3 py-2"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <span className="font-medium text-gray-900">{session.date}</span>
+                          <span className="block text-sm text-gray-600">
+                            {session.status} · {trainerName(session.trainer_id)}
+                            {session.session_info !== null &&
+                              ` · ${session.session_info}`}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => startSessionEdit(session)}
+                          className="rounded-md border border-gray-300 px-2 py-1 text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          Bearbeiten
+                        </button>
+                      </div>
+                      {editingSessionId === session.id && (
+                        <div className="mt-2 space-y-2">
+                          <select
+                            aria-label="Vertretungstrainer"
+                            value={editTrainer}
+                            onChange={(event) => setEditTrainer(event.target.value)}
+                            className={inputClass}
+                          >
+                            <option value="">Lead-Trainer</option>
+                            {trainers.map((entry) => (
+                              <option key={entry.id} value={entry.id}>
+                                {entry.name}
+                              </option>
+                            ))}
+                          </select>
+                          <select
+                            aria-label="Status"
+                            value={editStatus}
+                            onChange={(event) =>
+                              setEditStatus(event.target.value as SessionStatus)
+                            }
+                            className={inputClass}
+                          >
+                            <option value="scheduled">Geplant</option>
+                            <option value="substituted">Vertretung</option>
+                            <option value="cancelled">Abgesagt</option>
+                          </select>
+                          <textarea
+                            aria-label="Mitteilung an Teilnehmer"
+                            placeholder="Mitteilung an die Teilnehmer"
+                            value={editInfo}
+                            onChange={(event) => setEditInfo(event.target.value)}
+                            className={inputClass}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => void handleSessionSave(course.id)}
+                            className="w-full rounded-md bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-700"
+                          >
+                            Termin speichern
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {(sessions[course.id] ?? []).length === 0 && (
+                    <p className="text-sm text-gray-600">Noch keine Termine.</p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void handleGenerate(course)}
+                    className="w-full rounded-md border border-indigo-600 px-4 py-2 text-sm font-medium text-indigo-600 hover:bg-indigo-50"
+                  >
+                    Termine für 4 Wochen erzeugen
+                  </button>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+        {notice !== null && (
+          <p role="status" className="mt-4 text-sm text-green-700">
+            {notice}
+          </p>
+        )}
+        {error !== null && (
+          <p role="alert" className="mt-4 text-sm text-red-600">
+            {error}
+          </p>
+        )}
+      </section>
+
+      <section className="rounded-lg bg-white p-6 shadow-md">
+        <h2 className="mb-4 text-xl font-semibold text-gray-900">
+          Neuer wiederkehrender Kurs
+        </h2>
+        <form onSubmit={handleCreate} className="space-y-3">
+          <input
+            aria-label="Titel"
+            placeholder="Titel *"
+            required
+            value={form.title}
+            onChange={(event) => setField('title', event.target.value)}
+            className={inputClass}
+          />
+          <textarea
+            aria-label="Beschreibung"
+            placeholder="Beschreibung"
+            value={form.description}
+            onChange={(event) => setField('description', event.target.value)}
+            className={inputClass}
+          />
+          <div className="grid grid-cols-3 gap-3">
+            <label className="block text-sm text-gray-700">
+              Wochentag
+              <select
+                aria-label="Wochentag"
+                value={form.day_of_week}
+                onChange={(event) => setField('day_of_week', event.target.value)}
+                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900"
+              >
+                {[1, 2, 3, 4, 5, 6, 7].map((day) => (
+                  <option key={day} value={day}>
+                    {weekdayName(day)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-sm text-gray-700">
+              Startzeit
+              <input
+                aria-label="Startzeit"
+                type="time"
+                required
+                value={form.start_time}
+                onChange={(event) => setField('start_time', event.target.value)}
+                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900"
+              />
+            </label>
+            <label className="block text-sm text-gray-700">
+              Endzeit
+              <input
+                aria-label="Endzeit"
+                type="time"
+                required
+                value={form.end_time}
+                onChange={(event) => setField('end_time', event.target.value)}
+                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900"
+              />
+            </label>
+          </div>
+          <label className="block text-sm text-gray-700">
+            Standard-Trainer (Lead)
+            <select
+              aria-label="Standard-Trainer"
+              value={form.trainer_id}
+              onChange={(event) => setField('trainer_id', event.target.value)}
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900"
+            >
+              <option value="">Kein Lead-Trainer</option>
+              {trainers.map((entry) => (
+                <option key={entry.id} value={entry.id}>
+                  {entry.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <input
+            aria-label="Kapazität"
+            placeholder="Kapazität (leer = vom Raum erben)"
+            type="number"
+            min={1}
+            value={form.capacity}
+            onChange={(event) => setField('capacity', event.target.value)}
+            className={inputClass}
+          />
+          <input
+            aria-label="Vorschaubild-URL"
+            placeholder="Vorschaubild-URL"
+            value={form.thumbnail_url}
+            onChange={(event) => setField('thumbnail_url', event.target.value)}
+            className={inputClass}
+          />
+          <input
+            aria-label="Bild-URL"
+            placeholder="Bild-URL"
+            value={form.image_url}
+            onChange={(event) => setField('image_url', event.target.value)}
+            className={inputClass}
+          />
+          <input
+            aria-label="Web-Link"
+            placeholder="Web-Link (https://…)"
+            value={form.web_link}
+            onChange={(event) => setField('web_link', event.target.value)}
+            className={inputClass}
+          />
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={form.generate}
+              onChange={(event) =>
+                setForm((previous) => ({ ...previous, generate: event.target.checked }))
+              }
+            />
+            Termine für die nächsten 4 Wochen erzeugen
+          </label>
+          <button
+            type="submit"
+            disabled={saving}
+            className="w-full rounded-md bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+          >
+            {saving ? 'Wird angelegt …' : 'Kurs anlegen'}
+          </button>
         </form>
       </section>
     </div>

@@ -401,6 +401,8 @@ Regeln:
 | `GET /api/studios/{studio}/courses/{course}/sessions` | GET | `auth:sanctum` + `can:courses.view` | `StudioPolicy` (studio_id) |
 | `POST /api/studios/{studio}/courses/{course}/sessions` | POST | `auth:sanctum` + `can:courses.manage` | `CoursePolicy` (update) |
 | `DELETE /api/studios/{studio}/courses/{course}/sessions/{session}` | DELETE | `auth:sanctum` + `can:courses.manage` | `CoursePolicy` (update) |
+| `PUT /api/studios/{studio}/courses/{course}/sessions/{session}` | PUT | `auth:sanctum` + `can:courses.manage` | `CoursePolicy` (update) |
+| `POST /api/studios/{studio}/courses/{course}/sessions/generate` | POST | `auth:sanctum` + `can:courses.manage` | `CoursePolicy` (update) — erzeugt idempotent die Termine der nächsten N Wochen (Default 4, max 12) |
 | `GET /api/bookings` | GET | `auth:sanctum` + `can:bookings.manage` | `BookingPolicy` (view, via Scope) |
 | `POST /api/courses/{course}/updates` | POST | `auth:sanctum` + `can:course-updates.create` | `CoursePolicy` (Pivot/Studio) |
 | `PUT /api/courses/{course}/updates/{update}` | PUT | `auth:sanctum` + `can:course-updates.create` | `CoursePolicy` (Pivot/Studio) |

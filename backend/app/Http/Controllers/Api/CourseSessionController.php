@@ -32,6 +32,24 @@ class CourseSessionController extends Controller
         return response()->json($session, 201);
     }
 
+    public function update(Request $request, int $studio, int $course, int $session): JsonResponse
+    {
+        $courseModel = $this->resolveCourse($request, $studio, $course);
+        $this->authorize('update', $courseModel);
+
+        $model = $courseModel->sessions()->findOrFail($session);
+        $model->update($request->validate([
+            'room_id' => ['sometimes', 'nullable', 'integer', 'exists:rooms,id'],
+            'trainer_id' => ['sometimes', 'nullable', 'integer', 'exists:users,id'],
+            'date' => ['sometimes', 'date'],
+            'status' => ['sometimes', 'string', 'in:scheduled,cancelled,substituted'],
+            'session_info' => ['sometimes', 'nullable', 'string'],
+            'capacity' => ['sometimes', 'nullable', 'integer', 'min:1'],
+        ]));
+
+        return response()->json($model);
+    }
+
     public function destroy(Request $request, int $studio, int $course, int $session): JsonResponse
     {
         $courseModel = $this->resolveCourse($request, $studio, $course);
@@ -39,6 +57,40 @@ class CourseSessionController extends Controller
         $courseModel->sessions()->findOrFail($session)->delete();
 
         return response()->json(null, 204);
+    }
+
+    /**
+     * Generate the concrete sessions for the coming weeks (default 4).
+     * Skips dates that already have a session (idempotent).
+     */
+    public function generate(Request $request, int $studio, int $course): JsonResponse
+    {
+        $courseModel = $this->resolveCourse($request, $studio, $course);
+        $this->authorize('update', $courseModel);
+
+        $data = $request->validate([
+            'weeks' => ['sometimes', 'integer', 'min:1', 'max:12'],
+        ]);
+        $weeks = $data['weeks'] ?? 4;
+
+        $created = 0;
+        $today = now()->startOfDay();
+        for ($offset = 0; $offset < $weeks * 7; $offset++) {
+            $date = $today->copy()->addDays($offset);
+            if ($date->dayOfWeekIso !== (int) $courseModel->day_of_week) {
+                continue;
+            }
+            if ($courseModel->sessions()->whereDate('date', $date)->exists()) {
+                continue;
+            }
+            $courseModel->sessions()->create(['date' => $date->format('Y-m-d')]);
+            $created++;
+        }
+
+        return response()->json([
+            'created' => $created,
+            'sessions' => $courseModel->sessions()->orderBy('date')->get(),
+        ], 201);
     }
 
     private function resolveCourse(Request $request, int $studio, int $course): Course

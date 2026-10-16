@@ -50,6 +50,8 @@ Route::middleware('auth:sanctum')->group(function (): void {
 
     Route::get('/studios/{studio}/courses/{course}/sessions', [CourseSessionController::class, 'index'])->can('courses.view');
     Route::post('/studios/{studio}/courses/{course}/sessions', [CourseSessionController::class, 'store'])->can('courses.manage');
+    Route::post('/studios/{studio}/courses/{course}/sessions/generate', [CourseSessionController::class, 'generate'])->can('courses.manage');
+    Route::put('/studios/{studio}/courses/{course}/sessions/{session}', [CourseSessionController::class, 'update'])->can('courses.manage');
     Route::delete('/studios/{studio}/courses/{course}/sessions/{session}', [CourseSessionController::class, 'destroy'])->can('courses.manage');
 
     Route::get('/bookings', [BookingController::class, 'index'])->can('bookings.manage');
