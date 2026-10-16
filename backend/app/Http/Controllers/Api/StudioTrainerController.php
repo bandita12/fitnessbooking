@@ -17,7 +17,18 @@ class StudioTrainerController extends Controller
     {
         $model = Studio::forTenant($request->user())->findOrFail($studio);
 
-        return response()->json($model->trainers()->get(['users.id', 'users.name', 'users.email']));
+        $pivot = $model->trainers()->get(['users.id', 'users.name', 'users.email']);
+        // Trainers assigned directly via `users.studio_id` (e.g. by a
+        // super-admin, or data predating the n:m pivot) have no pivot row but
+        // belong to the studio all the same — include them so dropdowns and
+        // the trainer list never silently drop them.
+        $direct = User::where('role', UserRole::Trainer->value)
+            ->where('studio_id', $model->id)
+            ->get(['id', 'name', 'email']);
+
+        $trainers = $pivot->concat($direct)->unique('id')->values();
+
+        return response()->json($trainers);
     }
 
     /**

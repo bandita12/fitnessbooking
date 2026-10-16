@@ -1187,7 +1187,9 @@ function CoursesSection({ studioId }: { studioId: number }) {
   const [trainers, setTrainers] = useState<Trainer[]>([])
   const [rooms, setRooms] = useState<Room[]>([])
   const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const [coursesError, setCoursesError] = useState<string | null>(null)
+  const [trainersError, setTrainersError] = useState<string | null>(null)
+  const [roomsError, setRoomsError] = useState<string | null>(null)
   const [form, setForm] = useState<CourseFormState>(emptyCourseForm)
   const [editingCourseId, setEditingCourseId] = useState<number | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -1202,16 +1204,30 @@ function CoursesSection({ studioId }: { studioId: number }) {
 
   useEffect(() => {
     let active = true
-    Promise.all([listCourses(studioId), listTrainers(studioId), listRooms(studioId)])
-      .then(([courseData, trainerData, roomData]) => {
-        if (active) {
-          setCourses(courseData)
-          setTrainers(trainerData)
-          setRooms(roomData)
+    // allSettled statt Promise.all: ein fehlender Teil (z. B. Trainer) darf
+    // die übrigen Dropdowns (z. B. Räume) nicht mit leeren.
+    Promise.allSettled([
+      listCourses(studioId),
+      listTrainers(studioId),
+      listRooms(studioId),
+    ])
+      .then(([courseResult, trainerResult, roomResult]) => {
+        if (!active) return
+        if (courseResult.status === 'fulfilled') {
+          setCourses(courseResult.value)
+        } else {
+          setCoursesError('Kurse konnten nicht geladen werden.')
         }
-      })
-      .catch(() => {
-        if (active) setLoadError('Kurse konnten nicht geladen werden.')
+        if (trainerResult.status === 'fulfilled') {
+          setTrainers(trainerResult.value)
+        } else {
+          setTrainersError('Trainer konnten nicht geladen werden.')
+        }
+        if (roomResult.status === 'fulfilled') {
+          setRooms(roomResult.value)
+        } else {
+          setRoomsError('Räume konnten nicht geladen werden.')
+        }
       })
       .finally(() => {
         if (active) setLoading(false)
@@ -1371,9 +1387,9 @@ function CoursesSection({ studioId }: { studioId: number }) {
       <section className="rounded-lg bg-white p-6 shadow-md">
         <h2 className="mb-4 text-xl font-semibold text-gray-900">Kursvorlagen</h2>
         {loading && <p className="text-gray-600">Wird geladen …</p>}
-        {loadError !== null && (
+        {coursesError !== null && (
           <p role="alert" className="text-sm text-red-600">
-            {loadError}
+            {coursesError}
           </p>
         )}
         <ul className="space-y-2">
@@ -1588,6 +1604,11 @@ function CoursesSection({ studioId }: { studioId: number }) {
                 </option>
               ))}
             </select>
+            {trainersError !== null && (
+              <p role="alert" className="mt-1 text-sm text-red-600">
+                {trainersError}
+              </p>
+            )}
           </label>
           <label className="block text-sm text-gray-700">
             Standard-Raum
@@ -1604,6 +1625,11 @@ function CoursesSection({ studioId }: { studioId: number }) {
                 </option>
               ))}
             </select>
+            {roomsError !== null && (
+              <p role="alert" className="mt-1 text-sm text-red-600">
+                {roomsError}
+              </p>
+            )}
           </label>
           <input
             aria-label="Kapazität"

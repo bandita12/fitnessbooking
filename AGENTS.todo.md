@@ -2,6 +2,7 @@
 
 Stand: 2026-10-14. Nur offene TODO-Positionen.
 
+- [ ] Follow-up Trainer-Listen-Fix (Verify-Findings 2026-10-16): `StudioTrainerController@update/@destroy` greifen nur für Pivot-verknüpfte Trainer — direkt zugeordnete (`users.studio_id`) sind sichtbar, aber nicht editier-/entfernbar (medium; entscheiden: auch dort berücksichtigen oder beim Anlegen immer Pivot schreiben). Klein: Fehler-States in `CoursesSection` bei Reload zurücksetzen; Positions-Assertion in `StudioTrainerListingTest:56` mengenbasiert machen
 - [ ] `features/` anlegen: erstes Feature als SOLL-Zustand dokumentieren (Architektur, Datenmodell, API-Verträge)
 - [ ] Nach dem ersten `git pull` im Skills-Repo: `AGENTS.skills.md` fortschreiben (skill `skills-marker`)
 - [ ] GitHub-CI: Laravel-Workflows liegen unter `backend/.github/workflows/` — GitHub liest nur Root-`.github/workflows/`. Entweder nach Root verschieben oder per `paths`/Job-step auf `backend/` zeigen lassen (skill `github-ci-filters`)
