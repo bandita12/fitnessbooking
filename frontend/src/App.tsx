@@ -3,10 +3,11 @@ import Login from './components/Login'
 import ProtectedRoute from './components/ProtectedRoute'
 import { AuthProvider } from './context/AuthContext'
 import { useAuth } from './context/useAuth'
+import CalendarPage from './pages/CalendarPage'
 import CoursesPage from './pages/CoursesPage'
 import DashboardPage from './pages/DashboardPage'
 
-type MainView = 'courses' | 'dashboard'
+type MainView = 'courses' | 'calendar' | 'dashboard'
 
 function Shell() {
   const { user, loading, logout } = useAuth()
@@ -33,9 +34,16 @@ function Shell() {
               <button
                 type="button"
                 onClick={() => setView('courses')}
-                className={`rounded-md px-3 py-1 text-sm font-medium ${!showDashboard ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+                className={`rounded-md px-3 py-1 text-sm font-medium ${view === 'courses' ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
               >
                 Kursübersicht
+              </button>
+              <button
+                type="button"
+                onClick={() => setView('calendar')}
+                className={`rounded-md px-3 py-1 text-sm font-medium ${view === 'calendar' ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+              >
+                Kalender
               </button>
               <button
                 type="button"
@@ -43,6 +51,24 @@ function Shell() {
                 className={`rounded-md px-3 py-1 text-sm font-medium ${showDashboard ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
               >
                 Zur Studio-Verwaltung
+              </button>
+            </nav>
+          )}
+          {!isStaff && (
+            <nav className="flex gap-2" aria-label="Hauptmenü">
+              <button
+                type="button"
+                onClick={() => setView('courses')}
+                className={`rounded-md px-3 py-1 text-sm font-medium ${view === 'courses' ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+              >
+                Kursübersicht
+              </button>
+              <button
+                type="button"
+                onClick={() => setView('calendar')}
+                className={`rounded-md px-3 py-1 text-sm font-medium ${view === 'calendar' ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+              >
+                Kalender
               </button>
             </nav>
           )}
@@ -63,6 +89,12 @@ function Shell() {
       {showDashboard ? (
         <ProtectedRoute allowedRoles={['admin', 'studio_admin']}>
           <DashboardPage />
+        </ProtectedRoute>
+      ) : view === 'calendar' ? (
+        <ProtectedRoute
+          allowedRoles={['admin', 'studio_admin', 'trainer', 'customer']}
+        >
+          <CalendarPage />
         </ProtectedRoute>
       ) : (
         <ProtectedRoute

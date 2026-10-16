@@ -64,6 +64,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
 
     Route::get('/bookings', [BookingController::class, 'index'])->can('bookings.manage');
     Route::get('/course_sessions', [SessionCatalogController::class, 'index'])->can('courses.view');
+    Route::get('/my-sessions', [SessionCatalogController::class, 'mySessions'])->can('bookings.manage');
     Route::put('/course_sessions/{session}', [SessionController::class, 'update'])->can('course-updates.create');
     Route::post('/bookings', [BookingController::class, 'store'])->can('bookings.manage');
     Route::delete('/bookings/{booking}', [BookingController::class, 'destroy'])->can('bookings.manage');

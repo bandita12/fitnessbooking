@@ -76,6 +76,8 @@ export interface CatalogFilters {
   from?: string
   to?: string
   studio_id?: number | null
+  room_id?: number | null
+  include_cancelled?: boolean
 }
 
 export async function listCatalog(
@@ -87,7 +89,30 @@ export async function listCatalog(
   if (filters.studio_id !== undefined && filters.studio_id !== null) {
     params.studio_id = String(filters.studio_id)
   }
+  if (filters.room_id !== undefined && filters.room_id !== null) {
+    params.room_id = String(filters.room_id)
+  }
+  if (filters.include_cancelled === true) {
+    params.include_cancelled = '1'
+  }
   const { data } = await client.get<CatalogSession[]>('/api/course_sessions', {
+    params,
+  })
+  return data
+}
+
+export interface MySessionsFilters {
+  from?: string
+  to?: string
+}
+
+export async function listMySessions(
+  filters: MySessionsFilters = {},
+): Promise<CatalogSession[]> {
+  const params: Record<string, string> = {}
+  if (filters.from !== undefined) params.from = filters.from
+  if (filters.to !== undefined) params.to = filters.to
+  const { data } = await client.get<CatalogSession[]>('/api/my-sessions', {
     params,
   })
   return data

@@ -7,12 +7,18 @@ use App\Models\Booking;
 use App\Models\CourseSession;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 
 class SessionCatalogController extends Controller
 {
     /**
      * Public catalog of upcoming scheduled sessions with computed
      * availability and the current user's booking state.
+     *
+     * Cancelled sessions are excluded by default (booking view) and only
+     * included with `include_cancelled=1` (calendar view, greyed out).
+     * `room_id` matches the session's effective room (session room with
+     * fallback to the course room).
      */
     public function index(Request $request): JsonResponse
     {
@@ -20,6 +26,8 @@ class SessionCatalogController extends Controller
             'from' => ['sometimes', 'date'],
             'to' => ['sometimes', 'date', 'after_or_equal:from'],
             'studio_id' => ['sometimes', 'integer', 'exists:studios,id'],
+            'room_id' => ['sometimes', 'integer', 'exists:rooms,id'],
+            'include_cancelled' => ['sometimes', 'boolean'],
         ]);
 
         $from = $data['from'] ?? now()->format('Y-m-d');
@@ -27,12 +35,25 @@ class SessionCatalogController extends Controller
 
         $sessions = CourseSession::with(['course', 'course.room', 'room', 'trainer', 'course.leadTrainer'])
             ->withCount('bookings')
-            ->whereIn('status', ['scheduled', 'substituted'])
+            ->when(
+                ! ($data['include_cancelled'] ?? false),
+                fn ($query) => $query->whereIn('status', ['scheduled', 'substituted'])
+            )
             ->whereDate('date', '>=', $from)
             ->whereDate('date', '<=', $to)
             ->when(isset($data['studio_id']), fn ($query) => $query->whereHas(
                 'course',
                 fn ($q) => $q->where('studio_id', $data['studio_id'])
+            ))
+            ->when(isset($data['room_id']), fn ($query) => $query->where(
+                fn ($q) => $q
+                    ->where('course_sessions.room_id', $data['room_id'])
+                    ->orWhere(
+                        fn ($qq) => $qq->whereNull('course_sessions.room_id')->whereHas(
+                            'course',
+                            fn ($c) => $c->where('room_id', $data['room_id'])
+                        )
+                    )
             ))
             ->orderBy('date')
             ->limit(100)
@@ -43,10 +64,54 @@ class SessionCatalogController extends Controller
             ->pluck('id', 'course_session_id')
             ->mapWithKeys(fn (int $id, string|int $sessionId): array => [(int) $sessionId => $id]);
 
-        return response()->json($sessions->map(function (CourseSession $session) use ($bookingIds): array {
-            $effectiveRoom = $session->room ?? $session->course->room;
+        return response()->json($sessions->map(
+            fn (CourseSession $session): array => $this->toCatalogArray($session, $bookingIds)
+        )->all());
+    }
 
-            return [
+    /**
+     * Sessions the current user has booked (all statuses, including
+     * cancelled ones), in catalog shape. Powers the personalized calendar.
+     */
+    public function mySessions(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'from' => ['sometimes', 'date'],
+            'to' => ['sometimes', 'date', 'after_or_equal:from'],
+        ]);
+
+        $userId = $request->user()->id;
+        $from = $data['from'] ?? now()->format('Y-m-d');
+        $to = $data['to'] ?? now()->addWeeks(4)->format('Y-m-d');
+
+        $sessions = CourseSession::with(['course', 'course.room', 'room', 'trainer', 'course.leadTrainer'])
+            ->withCount('bookings')
+            ->whereHas('bookings', fn ($query) => $query->where('user_id', $userId))
+            ->whereDate('date', '>=', $from)
+            ->whereDate('date', '<=', $to)
+            ->orderBy('date')
+            ->limit(100)
+            ->get();
+
+        $bookingIds = Booking::where('user_id', $userId)
+            ->whereIn('course_session_id', $sessions->pluck('id')->all())
+            ->pluck('id', 'course_session_id')
+            ->mapWithKeys(fn (int $id, string|int $sessionId): array => [(int) $sessionId => $id]);
+
+        return response()->json($sessions->map(
+            fn (CourseSession $session): array => $this->toCatalogArray($session, $bookingIds)
+        )->all());
+    }
+
+    /**
+     * @param Collection<int, int> $bookingIds Maps session id → booking id.
+     * @return array<string, mixed>
+     */
+    private function toCatalogArray(CourseSession $session, Collection $bookingIds): array
+    {
+        $effectiveRoom = $session->room ?? $session->course->room;
+
+        return [
             'id' => $session->id,
             'date' => $session->date->format('Y-m-d'),
             'status' => $session->status,
@@ -78,6 +143,6 @@ class SessionCatalogController extends Controller
                 'id' => ($session->trainer ?? $session->course->leadTrainer)->id,
                 'name' => ($session->trainer ?? $session->course->leadTrainer)->name,
             ],
-        ]; })->all());
+        ];
     }
 }

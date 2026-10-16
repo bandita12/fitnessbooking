@@ -10,6 +10,12 @@ export interface Studio {
   thumbnail_url: string | null
   image_url: string | null
   web_link: string | null
+  /**
+   * Additive sort helpers from the studio list (calendar dropdowns).
+   * Optional because older responses and other endpoints may omit them.
+   */
+  trainers_count?: number
+  customers_count?: number
 }
 
 export interface NewStudio {
