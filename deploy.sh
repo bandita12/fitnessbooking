@@ -52,7 +52,85 @@ rm -f "$OUTPUT_DIR/laravel-back/storage/framework/sessions/"* 2>/dev/null || tru
 rm -f "$OUTPUT_DIR/laravel-back/storage/framework/views/"* 2>/dev/null || true
 rm -f "$OUTPUT_DIR/laravel-back/storage/logs/"* 2>/dev/null || true
 
-# --- 4. PUBLIC_HTML STRUKTUR ZUSAMMENFÜHREN ---
+# --- 4. PRODUKTIVE .ENV ERSTELLEN ---
+echo "🔐 Erstelle produktive .env für DotRoll..."
+cat << 'EOF' > "$OUTPUT_DIR/laravel-back/.env"
+APP_NAME=Laravel
+APP_ENV=production
+APP_KEY=
+APP_DEBUG=false
+APP_URL=https://booking.rosaktiv.eu/
+
+APP_LOCALE=de
+APP_FALLBACK_LOCALE=de
+APP_FAKER_LOCALE=de_DE
+
+APP_MAINTENANCE_DRIVER=file
+
+BCRYPT_ROUNDS=12
+
+LOG_CHANNEL=stack
+LOG_STACK=single
+LOG_DEPRECATIONS_CHANNEL=null
+LOG_LEVEL=error
+
+DB_CONNECTION=mysql
+DB_HOST=localhost
+DB_PORT=3306
+DB_DATABASE=ciavpjzc_lara848
+DB_USERNAME=ciavpjzc_lara848
+DB_PASSWORD=249]SP6Ap]
+
+SESSION_DRIVER=database
+SESSION_LIFETIME=120
+SESSION_ENCRYPT=false
+SESSION_PATH=/
+SESSION_DOMAIN=booking.rosaktiv.eu
+SESSION_SECURE_COOKIE=true
+
+BROADCAST_CONNECTION=log
+FILESYSTEM_DISK=local
+QUEUE_CONNECTION=database
+
+CACHE_STORE=database
+
+MEMCACHED_HOST=127.0.0.1
+
+REDIS_CLIENT=phpredis
+REDIS_HOST=127.0.0.1
+REDIS_PASSWORD=null
+REDIS_PORT=6379
+
+MAIL_MAILER=log
+MAIL_SCHEME=null
+MAIL_HOST=127.0.0.1
+MAIL_PORT=2525
+MAIL_USERNAME=null
+MAIL_PASSWORD=null
+MAIL_FROM_ADDRESS="hello@example.com"
+MAIL_FROM_NAME="${APP_NAME}"
+
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+AWS_DEFAULT_REGION=us-east-1
+AWS_BUCKET=
+AWS_USE_PATH_STYLE_ENDPOINT=false
+
+VITE_APP_NAME="${APP_NAME}"
+
+FRONTEND_URL=https://booking.rosaktiv.eu/
+
+SANCTUM_STATEFUL_DOMAINS=booking.rosaktiv.eu
+
+# Admin user seeding (DatabaseSeeder)
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=Fitness!Admin-2026-Booking
+STUDIO_ADMIN_PASSWORD=Fitness!Studio-Admin-2026-Booking
+TRAINER_PASSWORD=Fitness!Trainer-2026-Booking
+CUSTOMER_PASSWORD=Fitness!Customer-2026-Booking
+EOF
+
+# --- 6. PUBLIC_HTML STRUKTUR ZUSAMMENFÜHREN ---
 echo "🔀 Verschmelze React-Build und Laravel-Public in public_html..."
 
 # A) Laravel-Public-Basis kopieren (index.php, robots.txt, etc.)
@@ -61,7 +139,7 @@ cp -r "$BACKEND_DIR/public/." "$OUTPUT_DIR/public_html/"
 # B) React-Artefakte (index.html und assets/) hineinkopieren
 cp -r "$FRONTEND_DIR/dist/." "$OUTPUT_DIR/public_html/"
 
-# --- 5. AUTOMATISCHE ANPASSUNGEN (ROUTING & PFADE) ---
+# --- 7. AUTOMATISCHE ANPASSUNGEN (ROUTING & PFADE) ---
 echo "📝 Passe Pfade in public_html/index.php an..."
 # Ändert die relativen Pfade der verschobenen index.php, damit sie laravel-back findet
 sed -i "s|__DIR__.'/../|__DIR__.'/../laravel-back/|g" "$OUTPUT_DIR/public_html/index.php"
@@ -91,15 +169,12 @@ echo "------------------------------------------------------------------------"
 echo "👉 NÄCHSTE SCHRITTE FÜR DICH:"
 echo "1. Lade den Inhalt von '$OUTPUT_DIR/laravel-back' in das Root-Verzeichnis deines Webspace hoch."
 echo "2. Lade den Inhalt von '$OUTPUT_DIR/public_html' komplett in dein 'public_html' Verzeichnis auf dem Server."
-echo "3. Erstelle auf dem Server im Ordner 'laravel-back/' eine produktive '.env' Datei:"
-echo "   - APP_URL=https://booking.rosaktiv.eu/ (muss mit PROD_URL übereinstimmen)"
-echo "   - APP_KEY per 'php artisan key:generate' erzeugen (niemals lokalen Dev-Key übernehmen)"
-echo "   - DotRoll-MySQL-Daten eintragen: DB_CONNECTION=mysql, DB_HOST, DB_PORT, DB_DATABASE, DB_USERNAME, DB_PASSWORD"
-echo "4. Auf dem Server in 'laravel-back/' ausführen:"
+echo "3. Auf dem Server in 'laravel-back/' ausführen:"
 echo "   composer install --no-dev --optimize-autoloader   (installiert vendor frisch auf dem Server – nicht hochladen!)"
+echo "   php artisan key:generate                          (APP_KEY erzeugt)"
 echo "   php artisan migrate --force"
 echo "   php artisan storage:link"
 echo "   php artisan config:cache"
-echo "5. Sanctum/HTTPS-Hinweis: SESSION_SECURE_COOKIE=true setzen; SESSION_DOMAIN und"
-echo "   SANCTUM_STATEFUL_DOMAINS auf die echte Domain setzen (ohne Protokoll, z. B. booking.rosaktiv.eu)."
+echo "4. Die .env Datei liegt bereits bei (mit DotRoll-MySQL, APP_URL, Sanctum-Domain)."
+echo "   Prüfe sie ggf. und passe bei Bedarf MAIL- oder weitere Werte an."
 echo "------------------------------------------------------------------------"
