@@ -35,17 +35,22 @@ if ! command -v composer >/dev/null 2>&1; then
 fi
 echo "📦 Installiere Composer-Abhängigkeiten für Produktion (ohne Dev-Pakete)..."
 (cd "$BACKEND_DIR" && composer install --no-dev --prefer-dist --optimize-autoloader)
-# Kopiere alle Backend-Dateien außer den public-Ordner und lokale Caches
-rsync -av --progress "$BACKEND_DIR/" "$OUTPUT_DIR/laravel-back/" \
-    --exclude 'public' \
-    --exclude 'node_modules' \
-    --exclude '.env' \
-    --exclude 'storage/framework/cache/data/*' \
-    --exclude 'storage/framework/sessions/*' \
-    --exclude 'storage/framework/views/*' \
-    --exclude 'storage/logs/*' \
-    --exclude '.git' \
-    --exclude 'tests'
+
+echo "📂 Kopiere Laravel-Dateien (Git Bash-kompatibel)..."
+# Kopiere das gesamte Backend-Verzeichnis in das Zielverzeichnis
+cp -r "$BACKEND_DIR/." "$OUTPUT_DIR/laravel-back/"
+
+# Bereinige die Verzeichnisse und Dateien, die nicht auf den Server gehören
+rm -rf "$OUTPUT_DIR/laravel-back/public"
+rm -rf "$OUTPUT_DIR/laravel-back/node_modules"
+rm -rf "$OUTPUT_DIR/laravel-back/vendor"
+rm -rf "$OUTPUT_DIR/laravel-back/.env"
+rm -rf "$OUTPUT_DIR/laravel-back/.git"
+rm -rf "$OUTPUT_DIR/laravel-back/tests"
+rm -f "$OUTPUT_DIR/laravel-back/storage/framework/cache/data/"* 2>/dev/null || true
+rm -f "$OUTPUT_DIR/laravel-back/storage/framework/sessions/"* 2>/dev/null || true
+rm -f "$OUTPUT_DIR/laravel-back/storage/framework/views/"* 2>/dev/null || true
+rm -f "$OUTPUT_DIR/laravel-back/storage/logs/"* 2>/dev/null || true
 
 # --- 4. PUBLIC_HTML STRUKTUR ZUSAMMENFÜHREN ---
 echo "🔀 Verschmelze React-Build und Laravel-Public in public_html..."
@@ -91,6 +96,7 @@ echo "   - APP_URL=https://booking.rosaktiv.eu/ (muss mit PROD_URL übereinstimm
 echo "   - APP_KEY per 'php artisan key:generate' erzeugen (niemals lokalen Dev-Key übernehmen)"
 echo "   - DotRoll-MySQL-Daten eintragen: DB_CONNECTION=mysql, DB_HOST, DB_PORT, DB_DATABASE, DB_USERNAME, DB_PASSWORD"
 echo "4. Auf dem Server in 'laravel-back/' ausführen:"
+echo "   composer install --no-dev --optimize-autoloader   (installiert vendor frisch auf dem Server – nicht hochladen!)"
 echo "   php artisan migrate --force"
 echo "   php artisan storage:link"
 echo "   php artisan config:cache"
