@@ -48,7 +48,7 @@ import {
 } from '../api/sessions'
 import { useAuth } from '../context/useAuth'
 
-type Tab = 'studios' | 'admins' | 'rooms' | 'courses'
+type Tab = 'studios' | 'admins' | 'rooms' | 'trainers' | 'courses'
 
 const emptyStudio: NewStudio = {
   name: '',
@@ -359,6 +359,13 @@ export default function DashboardPage() {
         </button>
         <button
           type="button"
+          onClick={() => setTab('trainers')}
+          className={`rounded-md px-4 py-2 font-medium ${tab === 'trainers' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 border border-gray-300'}`}
+        >
+          Trainer verwalten
+        </button>
+        <button
+          type="button"
           onClick={() => setTab('courses')}
           className={`rounded-md px-4 py-2 font-medium ${tab === 'courses' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 border border-gray-300'}`}
         >
@@ -366,7 +373,7 @@ export default function DashboardPage() {
         </button>
       </div>
 
-      {(tab === 'rooms' || tab === 'courses') && (
+      {(tab === 'rooms' || tab === 'trainers' || tab === 'courses') && (
         <div className="mb-6 flex items-center gap-3 rounded-lg bg-white p-4 shadow-md">
           <label htmlFor="managed-studio" className="text-sm font-medium text-gray-700">
             Studio verwalten:
@@ -397,6 +404,14 @@ export default function DashboardPage() {
           </p>
         ) : (
           <RoomsSection key={`rooms-${managedStudioId}`} studioId={managedStudioId} />
+        ))}
+      {tab === 'trainers' &&
+        (managedStudioId === null ? (
+          <p className="rounded-lg bg-white p-6 text-gray-600 shadow-md">
+            Bitte oben ein Studio auswählen, um dessen Trainer zu verwalten.
+          </p>
+        ) : (
+          <TrainersSection key={`trainers-${managedStudioId}`} studioId={managedStudioId} />
         ))}
       {tab === 'courses' &&
         (managedStudioId === null ? (

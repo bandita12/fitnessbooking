@@ -159,6 +159,39 @@ class StudioManagementApiTest extends TestCase
         $this->assertSame(1, $studio->trainers()->count());
     }
 
+    public function test_super_admin_can_manage_trainers_of_any_studio(): void
+    {
+        $first = $this->makeStudio('First');
+        $second = $this->makeStudio('Second');
+        Sanctum::actingAs(User::factory()->create([
+            'role' => UserRole::Admin->value,
+            'studio_id' => null,
+        ]));
+
+        $this->getJson("/api/studios/{$second->id}/trainers")->assertOk()->assertJsonCount(0);
+
+        $registered = $this->postJson("/api/studios/{$first->id}/trainers", [
+            'name' => 'Trainer Neu',
+            'email' => 'neu@example.com',
+            'password' => 'geheim123',
+        ])->assertCreated()->assertJsonPath('role', 'trainer');
+        $this->assertTrue($first->trainers()->whereKey($registered->json('id'))->exists());
+
+        $existing = User::factory()->create(['role' => UserRole::Trainer->value]);
+        $this->postJson("/api/studios/{$second->id}/trainers/attach", [
+            'email' => $existing->email,
+        ])->assertOk();
+        $this->assertTrue($second->trainers()->whereKey($existing->id)->exists());
+
+        $this->putJson("/api/studios/{$second->id}/trainers/{$existing->id}", [
+            'name' => 'Trainer Geändert',
+        ])->assertOk()->assertJsonPath('name', 'Trainer Geändert');
+        $this->assertDatabaseHas('users', ['id' => $existing->id, 'name' => 'Trainer Geändert']);
+
+        $this->deleteJson("/api/studios/{$second->id}/trainers/{$existing->id}")->assertNoContent();
+        $this->assertSame(0, $second->trainers()->count());
+    }
+
     public function test_trainer_cannot_manage_rooms(): void
     {
         $studio = $this->makeStudio();
