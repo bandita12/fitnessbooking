@@ -178,3 +178,21 @@ echo "   php artisan config:cache"
 echo "4. Die .env Datei liegt bereits bei (mit DotRoll-MySQL, APP_URL, Sanctum-Domain)."
 echo "   Prüfe sie ggf. und passe bei Bedarf MAIL- oder weitere Werte an."
 echo "------------------------------------------------------------------------"
+
+# --- 8. DEPLOY-MARKER FÜR INKREMENTELLES DEPLOYMENT ---
+# Merkt sich, welcher Commit vollständig deployt wurde, damit deploy_diff.sh
+# beim nächsten Mal nur die Änderungen seit diesem Stand packt.
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  REPO_ROOT="$(git rev-parse --show-toplevel)"
+  git rev-parse HEAD > "$REPO_ROOT/.deploy_last"
+  GIT_COMMON_DIR="$(git rev-parse --git-common-dir)"
+  case "$GIT_COMMON_DIR" in
+    /* | [A-Za-z]:/*) ;;
+    *) GIT_COMMON_DIR="$REPO_ROOT/$GIT_COMMON_DIR" ;;
+  esac
+  EXCLUDE_FILE="$GIT_COMMON_DIR/info/exclude"
+  mkdir -p "$(dirname "$EXCLUDE_FILE")"
+  for entry in ".deploy_last" "deploy_diff/"; do
+    grep -qxF "$entry" "$EXCLUDE_FILE" 2>/dev/null || printf '%s\n' "$entry" >> "$EXCLUDE_FILE"
+  done
+fi
